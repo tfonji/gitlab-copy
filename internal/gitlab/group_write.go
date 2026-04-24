@@ -5,6 +5,7 @@ package gitlab
 // this lets default_branch_name and mr_settings each issue a targeted PUT
 // without clobbering fields they don't own.
 type GroupUpdateRequest struct {
+	Description                               *string `json:"description,omitempty"`
 	DefaultBranchName                         *string `json:"default_branch_name,omitempty"`
 	OnlyAllowMergeIfPipelineSucceeds          *bool   `json:"only_allow_merge_if_pipeline_succeeds,omitempty"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved *bool   `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty"`

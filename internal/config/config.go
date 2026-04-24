@@ -53,6 +53,7 @@ type Config struct {
 // Tier 1 defaults — well-defined REST, clean natural keys.
 var DefaultGroupDomains = []string{
 	"push_rules",
+	"description",
 	"default_branch_name",
 	"mr_settings",
 	"mr_approval_settings",
@@ -67,6 +68,9 @@ var DefaultProjectDomains = []string{
 	"jira_integration",
 	"pipeline_triggers",
 	"deploy_keys",
+	"project_push_rules",
+	"project_mr_approvals",
+	"project_approval_rules",
 }
 
 func Load(path string) (*Config, error) {

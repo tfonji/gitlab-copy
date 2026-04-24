@@ -31,16 +31,18 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 	switch domain {
 	case "push_rules":
 		return c.copyPushRules(groupPath)
+	case "description":
+		return c.copyDescription(groupPath)
 	case "default_branch_name":
 		return c.copyDefaultBranchName(groupPath)
 	case "mr_settings":
 		return c.copyMRSettings(groupPath)
+	case "mr_approval_settings":
+		return c.copyMRApprovalSettings(groupPath)
 	case "protected_environments":
 		return c.copyProtectedEnvironments(groupPath)
 	case "approval_rules":
 		return c.copyApprovalRules(groupPath)
-	case "mr_approval_settings":
-		return c.copyMRApprovalSettings(groupPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -447,6 +449,157 @@ func (c *GroupCopier) copyApprovalRules(groupPath string) internal.DomainCopyRes
 			item.Error = fmt.Errorf("rule created but approvers not copied — user/group IDs are instance-specific, assign manually")
 		}
 		result.Items = append(result.Items, item)
+	}
+
+	return result
+}
+
+// --- description ---
+
+func (c *GroupCopier) copyDescription(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "description"}
+
+	src, err := c.src.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source group: %w", err)
+		return result
+	}
+	dst, err := c.dst.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest group: %w", err)
+		return result
+	}
+
+	if src.Description == dst.Description {
+		result.Items = []internal.ItemResult{
+			{Key: "description", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{
+			{Key: "description", Action: internal.ActionUpdated, DryRun: true},
+		}
+		return result
+	}
+
+	if err := c.dst.UpdateGroup(groupPath, gitlab.GroupUpdateRequest{
+		Description: gitlab.StrPtr(src.Description),
+	}); err != nil {
+		result.Items = []internal.ItemResult{
+			{Key: "description", Action: internal.ActionFailed, Error: err},
+		}
+		return result
+	}
+
+	result.Items = []internal.ItemResult{
+		{Key: "description", Action: internal.ActionUpdated},
+	}
+	return result
+}
+
+// --- variables ---
+
+func (c *GroupCopier) copyVariables(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "variables"}
+
+	srcVars, err := c.src.GetGroupVariables(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source variables: %w", err)
+		return result
+	}
+	dstVars, err := c.dst.GetGroupVariables(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest variables: %w", err)
+		return result
+	}
+
+	// Index dest by key::scope
+	dstByKey := make(map[string]gitlab.Variable, len(dstVars))
+	for _, v := range dstVars {
+		dstByKey[v.Key+"::"+v.EnvironmentScope] = v
+	}
+
+	sort.Slice(srcVars, func(i, j int) bool {
+		return srcVars[i].Key < srcVars[j].Key
+	})
+
+	for _, src := range srcVars {
+		itemKey := src.Key + "::" + src.EnvironmentScope
+
+		// Skip masked/hidden — value cannot be read from API
+		if src.IsSensitive() {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    itemKey,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+				Error:  fmt.Errorf("masked/hidden variable — value not accessible, create manually on dest"),
+			})
+			continue
+		}
+
+		dst, exists := dstByKey[itemKey]
+
+		// Check if all copyable fields match
+		if exists &&
+			src.Value == dst.Value &&
+			src.VariableType == dst.VariableType &&
+			src.Protected == dst.Protected &&
+			src.Raw == dst.Raw &&
+			src.Description == dst.Description {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    itemKey,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		action := internal.ActionCreated
+		if exists {
+			action = internal.ActionUpdated
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    itemKey,
+				Action: action,
+				DryRun: true,
+			})
+			continue
+		}
+
+		req := gitlab.VariableRequest{
+			Key:              src.Key,
+			Value:            src.Value,
+			VariableType:     src.VariableType,
+			Protected:        src.Protected,
+			Masked:           src.Masked,
+			Raw:              src.Raw,
+			EnvironmentScope: src.EnvironmentScope,
+			Description:      src.Description,
+		}
+
+		var writeErr error
+		if exists {
+			writeErr = c.dst.UpdateGroupVariable(groupPath, src.Key, src.EnvironmentScope, req)
+		} else {
+			writeErr = c.dst.CreateGroupVariable(groupPath, req)
+		}
+
+		if writeErr != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    itemKey,
+				Action: internal.ActionFailed,
+				Error:  writeErr,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    itemKey,
+				Action: action,
+			})
+		}
 	}
 
 	return result

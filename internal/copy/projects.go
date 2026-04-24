@@ -41,6 +41,12 @@ func (c *ProjectCopier) copyDomain(projectPath, domain string) internal.DomainCo
 		return c.copyPipelineTriggers(projectPath)
 	case "deploy_keys":
 		return c.copyDeployKeys(projectPath)
+	case "project_push_rules":
+		return c.copyProjectPushRules(projectPath)
+	case "project_mr_approvals":
+		return c.copyProjectMRApprovals(projectPath)
+	case "project_approval_rules":
+		return c.copyProjectApprovalRules(projectPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -423,6 +429,221 @@ func (c *ProjectCopier) copyDeployKeys(projectPath string) internal.DomainCopyRe
 				Action: internal.ActionCreated,
 			})
 		}
+	}
+
+	return result
+}
+
+// --- project_push_rules ---
+
+func (c *ProjectCopier) copyProjectPushRules(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "project_push_rules"}
+
+	src, err := c.src.GetProjectPushRules(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source push rules: %w", err)
+		return result
+	}
+	if src == nil {
+		result.Error = fmt.Errorf("source push rules not accessible (403)")
+		return result
+	}
+	if src.IsEmpty() {
+		result.Items = []internal.ItemResult{
+			{Key: "project_push_rules", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	dst, err := c.dst.GetProjectPushRules(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest push rules: %w", err)
+		return result
+	}
+
+	dstExists := dst != nil && !dst.IsEmpty()
+
+	if dstExists && src.Equal(dst) {
+		result.Items = []internal.ItemResult{
+			{Key: "project_push_rules", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	action := internal.ActionCreated
+	if dstExists {
+		action = internal.ActionUpdated
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{
+			{Key: "project_push_rules", Action: action, DryRun: true},
+		}
+		return result
+	}
+
+	req := gitlab.PushRuleRequestFrom(src)
+	var writeErr error
+	if dstExists {
+		writeErr = c.dst.UpdateProjectPushRules(projectPath, req)
+	} else {
+		writeErr = c.dst.CreateProjectPushRules(projectPath, req)
+	}
+	if writeErr != nil {
+		result.Items = []internal.ItemResult{
+			{Key: "project_push_rules", Action: internal.ActionFailed, Error: writeErr},
+		}
+		return result
+	}
+	result.Items = []internal.ItemResult{
+		{Key: "project_push_rules", Action: action},
+	}
+	return result
+}
+
+// --- project_mr_approvals ---
+
+func (c *ProjectCopier) copyProjectMRApprovals(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "project_mr_approvals"}
+
+	src, err := c.src.GetProjectMRApprovals(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source MR approvals: %w", err)
+		return result
+	}
+	if src == nil {
+		result.Items = []internal.ItemResult{
+			{Key: "project_mr_approvals", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	dst, err := c.dst.GetProjectMRApprovals(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest MR approvals: %w", err)
+		return result
+	}
+
+	matches := dst != nil &&
+		src.ApprovalsBeforeMerge == dst.ApprovalsBeforeMerge &&
+		src.ResetApprovalsOnPush == dst.ResetApprovalsOnPush &&
+		src.SelectiveCodeOwnerRemovals == dst.SelectiveCodeOwnerRemovals &&
+		src.DisableOverridingApproversPerMergeRequest == dst.DisableOverridingApproversPerMergeRequest &&
+		src.MergeRequestsAuthorApproval == dst.MergeRequestsAuthorApproval &&
+		src.MergeRequestsDisableCommittersApproval == dst.MergeRequestsDisableCommittersApproval &&
+		src.RequirePasswordToApprove == dst.RequirePasswordToApprove
+
+	if matches {
+		result.Items = []internal.ItemResult{
+			{Key: "project_mr_approvals", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{
+			{Key: "project_mr_approvals", Action: internal.ActionUpdated, DryRun: true},
+		}
+		return result
+	}
+
+	if err := c.dst.SetProjectMRApprovals(projectPath, src); err != nil {
+		result.Items = []internal.ItemResult{
+			{Key: "project_mr_approvals", Action: internal.ActionFailed, Error: err},
+		}
+		return result
+	}
+	result.Items = []internal.ItemResult{
+		{Key: "project_mr_approvals", Action: internal.ActionUpdated},
+	}
+	return result
+}
+
+// --- project_approval_rules ---
+
+func (c *ProjectCopier) copyProjectApprovalRules(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "project_approval_rules"}
+
+	srcRules, err := c.src.GetProjectApprovalRules(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source approval rules: %w", err)
+		return result
+	}
+	dstRules, err := c.dst.GetProjectApprovalRules(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest approval rules: %w", err)
+		return result
+	}
+
+	dstByName := make(map[string]gitlab.ProjectApprovalRule, len(dstRules))
+	for _, r := range dstRules {
+		dstByName[r.Name] = r
+	}
+
+	sort.Slice(srcRules, func(i, j int) bool {
+		return srcRules[i].Name < srcRules[j].Name
+	})
+
+	for _, src := range srcRules {
+		if src.RuleType == "code_owner" {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		req := gitlab.ProjectApprovalRuleRequest{
+			Name:              src.Name,
+			ApprovalsRequired: src.ApprovalsRequired,
+		}
+
+		dst, exists := dstByName[src.Name]
+		if exists && dst.ApprovalsRequired == src.ApprovalsRequired {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		action := internal.ActionCreated
+		if exists {
+			action = internal.ActionUpdated
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: action,
+				DryRun: true,
+			})
+			continue
+		}
+
+		var writeErr error
+		if exists {
+			writeErr = c.dst.UpdateProjectApprovalRule(projectPath, dst.ID, req)
+		} else {
+			writeErr = c.dst.CreateProjectApprovalRule(projectPath, req)
+		}
+
+		if writeErr != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionFailed,
+				Error:  writeErr,
+			})
+			continue
+		}
+
+		item := internal.ItemResult{Key: src.Name, Action: action}
+		if src.RuleType == "regular" {
+			item.Error = fmt.Errorf("rule created but approvers not copied — user/group IDs are instance-specific, assign manually")
+		}
+		result.Items = append(result.Items, item)
 	}
 
 	return result
