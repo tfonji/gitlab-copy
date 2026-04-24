@@ -39,6 +39,8 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copyProtectedEnvironments(groupPath)
 	case "approval_rules":
 		return c.copyApprovalRules(groupPath)
+	case "mr_approval_settings":
+		return c.copyMRApprovalSettings(groupPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -283,6 +285,71 @@ func (c *GroupCopier) copyProtectedEnvironments(groupPath string) internal.Domai
 		}
 	}
 
+	return result
+}
+
+// --- mr_approval_settings ---
+
+func (c *GroupCopier) copyMRApprovalSettings(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "mr_approval_settings"}
+
+	src, err := c.src.GetMRApprovalSettings(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source MR approval settings: %w", err)
+		return result
+	}
+	if src == nil {
+		result.Items = []internal.ItemResult{
+			{Key: "mr_approval_settings", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+	dst, err := c.dst.GetMRApprovalSettings(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest MR approval settings: %w", err)
+		return result
+	}
+
+	matches := dst != nil &&
+		src.AllowAuthorApproval.Value == dst.AllowAuthorApproval.Value &&
+		src.AllowCommitterApproval.Value == dst.AllowCommitterApproval.Value &&
+		src.AllowOverridesToApproverList.Value == dst.AllowOverridesToApproverList.Value &&
+		src.RequirePasswordToApprove.Value == dst.RequirePasswordToApprove.Value &&
+		src.RetainApprovalsOnPush.Value == dst.RetainApprovalsOnPush.Value &&
+		src.SelectiveCodeOwnerRemovals.Value == dst.SelectiveCodeOwnerRemovals.Value
+
+	if matches {
+		result.Items = []internal.ItemResult{
+			{Key: "mr_approval_settings", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{
+			{Key: "mr_approval_settings", Action: internal.ActionUpdated, DryRun: true},
+		}
+		return result
+	}
+
+	req := gitlab.MergeRequestApprovalSettingsRequest{
+		AllowAuthorApproval:          src.AllowAuthorApproval.Value,
+		AllowCommitterApproval:       src.AllowCommitterApproval.Value,
+		AllowOverridesToApproverList: src.AllowOverridesToApproverList.Value,
+		RequirePasswordToApprove:     src.RequirePasswordToApprove.Value,
+		RetainApprovalsOnPush:        src.RetainApprovalsOnPush.Value,
+		SelectiveCodeOwnerRemovals:   src.SelectiveCodeOwnerRemovals.Value,
+	}
+	if err := c.dst.SetMRApprovalSettings(groupPath, req); err != nil {
+		result.Items = []internal.ItemResult{
+			{Key: "mr_approval_settings", Action: internal.ActionFailed, Error: err},
+		}
+		return result
+	}
+
+	result.Items = []internal.ItemResult{
+		{Key: "mr_approval_settings", Action: internal.ActionUpdated},
+	}
 	return result
 }
 

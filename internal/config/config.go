@@ -55,6 +55,7 @@ var DefaultGroupDomains = []string{
 	"push_rules",
 	"default_branch_name",
 	"mr_settings",
+	"mr_approval_settings",
 	"protected_environments",
 	"approval_rules",
 }
