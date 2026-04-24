@@ -25,7 +25,7 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
 	defer f.Close()
 
 	created, updated, skipped, failed := result.TotalCounts()
-	title := "GitLab Copy Report"
+	title := "GitLab Migration Copy Report"
 	if result.DryRun {
 		title += " [DRY-RUN]"
 	}
@@ -38,130 +38,264 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
 <title>%s</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         background: #0f1117; color: #e2e8f0; font-size: 14px; }
-  .header { background: #1a1d2e; border-bottom: 1px solid #2d3748; padding: 20px 32px; }
-  .header h1 { font-size: 20px; font-weight: 600; color: #7c83e5; }
-  .header .meta { color: #718096; font-size: 13px; margin-top: 4px; }
-  .summary-bar { display: flex; gap: 24px; padding: 16px 32px;
-                 background: #141720; border-bottom: 1px solid #2d3748; }
-  .stat { display: flex; flex-direction: column; }
-  .stat .num { font-size: 22px; font-weight: 700; }
-  .stat .lbl { font-size: 12px; color: #718096; text-transform: uppercase; letter-spacing: .05em; }
-  .stat.created .num { color: #68d391; }
-  .stat.updated .num { color: #f6e05e; }
-  .stat.skipped .num { color: #718096; }
-  .stat.failed  .num { color: #fc8181; }
-  .tabs { display: flex; background: #1a1d2e; border-bottom: 1px solid #2d3748; padding: 0 32px; }
-  .tab { padding: 12px 20px; cursor: pointer; color: #718096; font-weight: 500;
-         border-bottom: 2px solid transparent; transition: all .15s; }
-  .tab.active { color: #7c83e5; border-color: #7c83e5; }
-  .tab:hover:not(.active) { color: #a0aec0; }
-  .pane { display: none; padding: 24px 32px; }
-  .pane.active { display: block; }
-  .group-block { margin-bottom: 28px; }
-  .group-title { font-size: 15px; font-weight: 600; color: #7c83e5;
-                 padding: 8px 0; border-bottom: 1px solid #2d3748; margin-bottom: 12px; }
-  .project-block { margin-left: 16px; margin-bottom: 20px; }
-  .project-title { font-size: 13px; font-weight: 600; color: #a0aec0; margin-bottom: 8px; }
-  .domain-block { margin-bottom: 10px; }
-  .domain-name { font-size: 12px; font-weight: 600; color: #718096;
-                 text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
-  .domain-error { color: #fc8181; font-size: 12px; padding: 4px 8px;
-                  background: #2d1515; border-radius: 4px; }
-  .items { display: flex; flex-direction: column; gap: 2px; }
-  .item { display: flex; align-items: center; gap: 8px; padding: 3px 8px;
-          border-radius: 4px; font-size: 13px; }
-  .item:hover { background: #1e2235; }
-  .badge { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px;
-           text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
-  .badge.created  { background: #1a3d2b; color: #68d391; }
-  .badge.updated  { background: #3d3519; color: #f6e05e; }
-  .badge.skipped  { background: #1e2235; color: #718096; }
-  .badge.failed   { background: #3d1515; color: #fc8181; }
-  .badge.drycreate { background: #1a2a3d; color: #63b3ed; }
-  .badge.dryupdate { background: #1a2a3d; color: #76e4f7; }
-  .badge.dryskip   { background: #1e2235; color: #718096; }
-  .item-key { color: #e2e8f0; }
-  .item-error { color: #fc8181; font-size: 12px; margin-left: 4px; }
-  .all-skipped { color: #4a5568; font-size: 12px; font-style: italic; padding: 2px 8px; }
-  .drybanner { background: #1a2a3d; border: 1px solid #2c4a6e; border-radius: 6px;
-               padding: 10px 16px; margin-bottom: 20px; color: #63b3ed; font-size: 13px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #333; font-size: 14px; }
+  header { background: #1a1a2e; color: white; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header .meta { font-size: 12px; color: #aaa; }
+  .status-banner { padding: 12px 32px; font-weight: 600; font-size: 14px; }
+  .status-banner.has-failures { background: #fdecea; color: #c0392b; border-left: 4px solid #c0392b; }
+  .status-banner.clean { background: #e8f8f0; color: #1e8449; border-left: 4px solid #1e8449; }
+  .status-banner.dry-run { background: #eaf4ff; color: #1a73e8; border-left: 4px solid #1a73e8; }
+  .container { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+  .summary-table { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 24px; overflow: hidden; }
+  .summary-table table { width: 100%%; border-collapse: collapse; }
+  .summary-table th { background: #f8f8f8; text-align: left; padding: 10px 16px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #666; border-bottom: 1px solid #eee; }
+  .summary-table td { padding: 10px 16px; border-bottom: 1px solid #f0f0f0; }
+  .summary-table tr:last-child td { border-bottom: none; }
+  .summary-table tr:hover td { background: #fafafa; }
+  .summary-table a { color: #1a73e8; text-decoration: none; font-weight: 500; }
+  .group-card { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 16px; overflow: hidden; }
+  .group-header { padding: 14px 20px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
+  .group-header:hover { background: #fafafa; }
+  .group-header h2 { font-size: 15px; font-weight: 600; font-family: monospace; }
+  .group-header .badges { display: flex; gap: 8px; align-items: center; }
+  .badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge.has-changes { background: #e8f4fd; color: #1a73e8; }
+  .badge.has-failures { background: #fdecea; color: #c0392b; }
+  .badge.clean { background: #e8f8f0; color: #1e8449; }
+  .badge.dry-run { background: #eaf4ff; color: #1a73e8; }
+  .chevron { transition: transform .2s; color: #999; }
+  .group-body { padding: 0 20px 16px; display: none; }
+  .group-body.open { display: block; }
+  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #888; margin: 16px 0 8px; }
+  .domain-row { display: flex; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid #f5f5f5; gap: 16px; }
+  .domain-row:last-child { border-bottom: none; }
+  .domain-name { min-width: 220px; flex-shrink: 0; font-family: monospace; font-size: 13px; color: #555; }
+  .domain-status { flex: 1; min-width: 0; }
+  .domain-error { color: #e67e22; font-size: 13px; }
+  .item-list { margin-top: 2px; }
+  .item-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 13px; }
+  .item-label { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 10px; text-transform: uppercase; white-space: nowrap; }
+  .item-label.created   { background: #e8f8f0; color: #1e8449; }
+  .item-label.updated   { background: #fff8e1; color: #e67e22; }
+  .item-label.skipped   { background: #f5f5f5; color: #999; }
+  .item-label.failed    { background: #fdecea; color: #c0392b; }
+  .item-label.drycreate { background: #eaf4ff; color: #1a73e8; }
+  .item-label.dryupdate { background: #eaf4ff; color: #1a73e8; }
+  .item-label.dryskip   { background: #f5f5f5; color: #999; }
+  .item-key { color: #333; font-family: monospace; }
+  .item-warn { color: #e67e22; font-size: 12px; margin-left: 4px; }
+  .item-err  { color: #c0392b; font-size: 12px; margin-left: 4px; }
+  .all-skipped { color: #aaa; font-size: 12px; font-style: italic; }
+  .toggle-all { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; color: #555; margin-bottom: 16px; }
+  .toggle-all:hover { background: #f5f5f5; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 0; }
+  .tab-btn { background: none; border: none; border-bottom: 3px solid transparent; padding: 8px 20px; font-size: 14px; font-weight: 600; cursor: pointer; color: #666; margin-bottom: -2px; }
+  .tab-btn.active { color: #1a73e8; border-bottom-color: #1a73e8; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .project-group-header { font-size: 14px; font-weight: 700; color: #444; padding: 16px 0 8px; border-bottom: 1px solid #eee; margin-bottom: 8px; }
+  .project-card { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 12px; overflow: hidden; }
+  .project-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; cursor: pointer; }
+  .project-header h3 { font-size: 14px; margin: 0; font-family: monospace; }
+  .project-header .project-path { font-size: 11px; color: #888; font-weight: 400; margin-left: 8px; font-family: monospace; }
+  .project-body { padding: 0 20px 16px; display: none; }
+  .project-body.open { display: block; }
+  .dry-run-banner { background: #eaf4ff; border: 1px solid #b3d4ff; border-radius: 6px; padding: 8px 14px; color: #1a73e8; font-size: 13px; margin-bottom: 16px; }
 </style>
 </head>
 <body>
-<div class="header">
+<header>
   <h1>%s</h1>
-  <div class="meta">Generated %s</div>
-</div>
-<div class="summary-bar">
-  <div class="stat created"><span class="num">%d</span><span class="lbl">Created</span></div>
-  <div class="stat updated"><span class="num">%d</span><span class="lbl">Updated</span></div>
-  <div class="stat skipped"><span class="num">%d</span><span class="lbl">Skipped</span></div>
-  <div class="stat failed"><span class="num">%d</span><span class="lbl">Failed</span></div>
-</div>
-<div class="tabs">
-  <div class="tab active" onclick="showTab('groups')">Groups</div>
-  <div class="tab" onclick="showTab('projects')">Projects</div>
-</div>
-`, title, title, time.Now().Format("2006-01-02 15:04:05"), created, updated, skipped, failed)
+  <div class="meta">Generated: %s UTC</div>
+</header>
+`, title, title, time.Now().UTC().Format("2006-01-02 15:04:05"))
+
+	// Status banner
+	if result.DryRun {
+		fmt.Fprintf(f, `<div class="status-banner dry-run">🔍 Dry-run mode — no changes were made. Actions show what <em>would</em> happen.</div>`)
+	} else if result.HasFailures {
+		fmt.Fprintf(f, `<div class="status-banner has-failures">✗ Copy finished with failures — review required</div>`)
+	} else {
+		fmt.Fprintf(f, `<div class="status-banner clean">✓ Copy complete — %d created, %d updated, %d skipped, %d failed</div>`,
+			created, updated, skipped, failed)
+	}
+
+	fmt.Fprintf(f, `<div class="container">`)
+
+	// Summary table
+	groupCount := len(result.Groups)
+	projectCount := 0
+	for _, gpg := range result.ProjectGroups {
+		projectCount += len(gpg.Projects)
+	}
+
+	fmt.Fprintf(f, `<div class="summary-table"><table>
+<thead><tr><th>Scope</th><th>Created</th><th>Updated</th><th>Skipped</th><th>Failed</th></tr></thead><tbody>`)
+	for _, gr := range result.Groups {
+		c, u, s, fa := 0, 0, 0, 0
+		for _, d := range gr.Domains {
+			dc, du, ds, df := d.Counts()
+			c += dc
+			u += du
+			s += ds
+			fa += df
+		}
+		fmt.Fprintf(f, `<tr><td><a href="#group-%s">%s</a> <span style="color:#888;font-size:11px">(group)</span></td><td>%d</td><td>%d</td><td>%d</td><td>%d</td></tr>`,
+			htmlID(gr.GroupPath), htmlEsc(gr.GroupPath), c, u, s, fa)
+	}
+	fmt.Fprintf(f, `<tr style="font-weight:600;background:#f8f8f8"><td>Total (%d groups, %d projects)</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td></tr>`,
+		groupCount, projectCount, created, updated, skipped, failed)
+	fmt.Fprintf(f, `</tbody></table></div>`)
+
+	// Tabs
+	fmt.Fprintf(f, `<div class="tabs">
+  <button class="tab-btn active" id="btn-groups" onclick="showTab('groups')">Groups (%d)</button>
+  <button class="tab-btn" id="btn-projects" onclick="showTab('projects')">Projects (%d)</button>
+</div>`, groupCount, projectCount)
 
 	// Groups pane
-	fmt.Fprintf(f, `<div id="pane-groups" class="pane active">`)
+	fmt.Fprintf(f, `<div id="tab-groups" class="tab-panel active">`)
 	if result.DryRun {
-		fmt.Fprintf(f, `<div class="drybanner">🔍 Dry-run mode — no changes were made. Actions show what <em>would</em> happen.</div>`)
+		fmt.Fprintf(f, `<div class="dry-run-banner">🔍 Dry-run mode — no changes were made. Actions show what <em>would</em> happen.</div>`)
 	}
+	fmt.Fprintf(f, `<button class="toggle-all" onclick="toggleAll()">Expand All</button>`)
 	for _, gr := range result.Groups {
-		fmt.Fprintf(f, `<div class="group-block"><div class="group-title">%s</div>`, htmlEsc(gr.GroupPath))
-		for _, d := range gr.Domains {
-			writeDomainHTML(f, d)
-		}
-		fmt.Fprintf(f, `</div>`)
+		writeGroupHTML(f, gr, result.DryRun)
 	}
 	fmt.Fprintf(f, `</div>`)
 
 	// Projects pane
-	fmt.Fprintf(f, `<div id="pane-projects" class="pane">`)
+	fmt.Fprintf(f, `<div id="tab-projects" class="tab-panel">`)
 	if result.DryRun {
-		fmt.Fprintf(f, `<div class="drybanner">🔍 Dry-run mode — no changes were made. Actions show what <em>would</em> happen.</div>`)
+		fmt.Fprintf(f, `<div class="dry-run-banner">🔍 Dry-run mode — no changes were made. Actions show what <em>would</em> happen.</div>`)
 	}
 	for _, gpg := range result.ProjectGroups {
-		fmt.Fprintf(f, `<div class="group-block"><div class="group-title">%s</div>`, htmlEsc(gpg.GroupPath))
+		fmt.Fprintf(f, `<div class="project-group-header">%s</div>`, htmlEsc(gpg.GroupPath))
 		for _, pr := range gpg.Projects {
-			fmt.Fprintf(f, `<div class="project-block"><div class="project-title">%s</div>`, htmlEsc(pr.ProjectPath))
-			for _, d := range pr.Domains {
-				writeDomainHTML(f, d)
-			}
-			fmt.Fprintf(f, `</div>`)
+			writeProjectHTML(f, pr, result.DryRun)
 		}
-		fmt.Fprintf(f, `</div>`)
 	}
 	fmt.Fprintf(f, `</div>`)
 
+	fmt.Fprintf(f, `</div>`) // container
+
 	fmt.Fprintf(f, `
 <script>
-function showTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
-  document.querySelector('[onclick="showTab(\''+name+'\')"]').classList.add('active');
-  document.getElementById('pane-'+name).classList.add('active');
+function toggleGroup(header) {
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.chevron');
+  const isOpen = body.classList.toggle('open');
+  if (chevron) chevron.style.transform = isOpen ? 'rotate(180deg)' : '';
 }
+function toggleProject(header) {
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.chevron');
+  const isOpen = body.classList.toggle('open');
+  if (chevron) chevron.style.transform = isOpen ? 'rotate(180deg)' : '';
+}
+function toggleAll() {
+  const bodies = document.querySelectorAll('.group-body, .project-body');
+  const btn = document.querySelector('.toggle-all');
+  const anyOpen = Array.from(bodies).some(b => b.classList.contains('open'));
+  bodies.forEach(b => b.classList.toggle('open', !anyOpen));
+  document.querySelectorAll('.chevron').forEach(c => c.style.transform = anyOpen ? '' : 'rotate(180deg)');
+  btn.textContent = anyOpen ? 'Expand All' : 'Collapse All';
+}
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('tab-' + name);
+  if (panel) panel.classList.add('active');
+  const btn = document.getElementById('btn-' + name);
+  if (btn) btn.classList.add('active');
+}
+document.querySelectorAll('.group-card, .project-card').forEach(card => {
+  if (card.querySelector('.badge.has-failures')) {
+    const body = card.querySelector('.group-body, .project-body');
+    const chevron = card.querySelector('.chevron');
+    if (body) body.classList.add('open');
+    if (chevron) chevron.style.transform = 'rotate(180deg)';
+  }
+});
 </script>
 </body></html>`)
 
 	return path, nil
 }
 
-func writeDomainHTML(f *os.File, d internal.DomainCopyResult) {
-	fmt.Fprintf(f, `<div class="domain-block"><div class="domain-name">%s</div>`, htmlEsc(d.Domain))
+func writeGroupHTML(f *os.File, gr internal.GroupCopyResult, dryRun bool) {
+	c, u, s, fa := 0, 0, 0, 0
+	for _, d := range gr.Domains {
+		dc, du, ds, df := d.Counts()
+		c += dc
+		u += du
+		s += ds
+		fa += df
+	}
+	_ = s
+	badgeClass, badgeText := groupBadge(c, u, fa, dryRun)
+
+	fmt.Fprintf(f, `<div class="group-card" id="group-%s">
+  <div class="group-header" onclick="toggleGroup(this)">
+    <h2>%s</h2>
+    <div class="badges"><span class="badge %s">%s</span><span class="chevron">▼</span></div>
+  </div>
+  <div class="group-body">
+    <div class="section-title">Domains</div>`,
+		htmlID(gr.GroupPath), htmlEsc(gr.GroupPath), badgeClass, badgeText)
+
+	for _, d := range gr.Domains {
+		writeDomainRowHTML(f, d)
+	}
+	fmt.Fprintf(f, `</div></div>`)
+}
+
+func writeProjectHTML(f *os.File, pr internal.ProjectCopyResult, dryRun bool) {
+	c, u, s, fa := 0, 0, 0, 0
+	for _, d := range pr.Domains {
+		dc, du, ds, df := d.Counts()
+		c += dc
+		u += du
+		s += ds
+		fa += df
+	}
+	_ = s
+	badgeClass, badgeText := groupBadge(c, u, fa, dryRun)
+
+	fmt.Fprintf(f, `<div class="project-card" id="proj-%s">
+  <div class="project-header" onclick="toggleProject(this)">
+    <h3>%s<span class="project-path">%s</span></h3>
+    <div class="badges"><span class="badge %s">%s</span><span class="chevron">▼</span></div>
+  </div>
+  <div class="project-body">`,
+		htmlID(pr.ProjectPath),
+		htmlEsc(projectName(pr.ProjectPath)),
+		htmlEsc(pr.ProjectPath),
+		badgeClass, badgeText)
+
+	for _, d := range pr.Domains {
+		writeDomainRowHTML(f, d)
+	}
+	fmt.Fprintf(f, `</div></div>`)
+}
+
+func writeDomainRowHTML(f *os.File, d internal.DomainCopyResult) {
+	fmt.Fprintf(f, `<div class="domain-row"><div class="domain-name">%s</div><div class="domain-status">`,
+		htmlEsc(d.Domain))
 
 	if d.Error != nil {
-		fmt.Fprintf(f, `<div class="domain-error">Error: %s</div>`, htmlEsc(d.Error.Error()))
-		fmt.Fprintf(f, `</div>`)
+		fmt.Fprintf(f, `<span class="domain-error">⚠ %s</span>`, htmlEsc(d.Error.Error()))
+		fmt.Fprintf(f, `</div></div>`)
 		return
 	}
 
-	// Check if all items are skipped for compact rendering
+	if len(d.Items) == 0 {
+		fmt.Fprintf(f, `<span class="all-skipped">— no items</span>`)
+		fmt.Fprintf(f, `</div></div>`)
+		return
+	}
+
 	allSkipped := true
 	for _, item := range d.Items {
 		if item.Action != internal.ActionSkipped {
@@ -169,27 +303,48 @@ func writeDomainHTML(f *os.File, d internal.DomainCopyResult) {
 			break
 		}
 	}
-
-	if allSkipped && len(d.Items) > 0 {
-		fmt.Fprintf(f, `<div class="all-skipped">all %d skipped</div>`, len(d.Items))
-		fmt.Fprintf(f, `</div>`)
+	if allSkipped {
+		fmt.Fprintf(f, `<span class="all-skipped">all %d skipped</span>`, len(d.Items))
+		fmt.Fprintf(f, `</div></div>`)
 		return
 	}
 
-	fmt.Fprintf(f, `<div class="items">`)
+	fmt.Fprintf(f, `<div class="item-list">`)
 	for _, item := range d.Items {
-		badgeClass, label := itemBadge(item)
-		errStr := ""
+		labelClass, labelText := itemLabelClassText(item)
+		extra := ""
 		if item.Error != nil {
-			errStr = fmt.Sprintf(`<span class="item-error">%s</span>`, htmlEsc(item.Error.Error()))
+			if item.Action == internal.ActionFailed {
+				extra = fmt.Sprintf(`<span class="item-err">⚠ %s</span>`, htmlEsc(item.Error.Error()))
+			} else {
+				extra = fmt.Sprintf(`<span class="item-warn">⚠ %s</span>`, htmlEsc(item.Error.Error()))
+			}
 		}
-		fmt.Fprintf(f, `<div class="item"><span class="badge %s">%s</span><span class="item-key">%s</span>%s</div>`,
-			badgeClass, label, htmlEsc(item.Key), errStr)
+		fmt.Fprintf(f, `<div class="item-row"><span class="item-label %s">%s</span><span class="item-key">%s</span>%s</div>`,
+			labelClass, labelText, htmlEsc(item.Key), extra)
 	}
+	fmt.Fprintf(f, `</div>`)
 	fmt.Fprintf(f, `</div></div>`)
 }
 
-func itemBadge(item internal.ItemResult) (class, label string) {
+func groupBadge(created, updated, failed int, dryRun bool) (class, text string) {
+	if failed > 0 {
+		return "has-failures", fmt.Sprintf("✗ %d failed", failed)
+	}
+	changes := created + updated
+	if dryRun {
+		if changes > 0 {
+			return "dry-run", fmt.Sprintf("~ %d would change", changes)
+		}
+		return "clean", "✓ no changes needed"
+	}
+	if changes > 0 {
+		return "has-changes", fmt.Sprintf("✓ %d changed", changes)
+	}
+	return "clean", "✓ no changes needed"
+}
+
+func itemLabelClassText(item internal.ItemResult) (class, text string) {
 	if item.DryRun {
 		switch item.Action {
 		case internal.ActionCreated:
@@ -212,6 +367,19 @@ func itemBadge(item internal.ItemResult) (class, label string) {
 	default:
 		return "skipped", string(item.Action)
 	}
+}
+
+func projectName(path string) string {
+	idx := strings.LastIndex(path, "/")
+	if idx >= 0 {
+		return path[idx+1:]
+	}
+	return path
+}
+
+func htmlID(s string) string {
+	r := strings.NewReplacer("/", "-", " ", "-", ".", "-", "_", "-")
+	return r.Replace(s)
 }
 
 func htmlEsc(s string) string {
