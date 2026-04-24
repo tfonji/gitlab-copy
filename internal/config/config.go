@@ -59,6 +59,8 @@ var DefaultGroupDomains = []string{
 	"mr_approval_settings",
 	"protected_environments",
 	"approval_rules",
+	"jira_integration",
+	"compliance_frameworks",
 }
 
 var DefaultProjectDomains = []string{
@@ -71,6 +73,9 @@ var DefaultProjectDomains = []string{
 	"project_push_rules",
 	"project_mr_approvals",
 	"project_approval_rules",
+	"badges",
+	"project_protected_branches",
+	"project_protected_tags",
 }
 
 func Load(path string) (*Config, error) {

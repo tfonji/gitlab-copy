@@ -48,6 +48,12 @@ func (c *ProjectCopier) copyDomain(projectPath, domain string) internal.DomainCo
 		return c.copyProjectMRApprovals(projectPath)
 	case "project_approval_rules":
 		return c.copyProjectApprovalRules(projectPath)
+	case "badges":
+		return c.copyBadges(projectPath)
+	case "project_protected_branches":
+		return c.copyProtectedBranches(projectPath)
+	case "project_protected_tags":
+		return c.copyProtectedTags(projectPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -683,6 +689,272 @@ func (c *ProjectCopier) copyProjectApprovalRules(projectPath string) internal.Do
 	return result
 }
 
+// --- badges ---
+
+// Badges have no natural unique key — we match by link_url+image_url.
+// Dest badges that don't exist on source are deleted (idempotent cleanup).
+// Source badges missing on dest are created.
+func (c *ProjectCopier) copyBadges(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "badges"}
+
+	srcBadges, err := c.src.GetProjectBadges(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source badges: %w", err)
+		return result
+	}
+	dstBadges, err := c.dst.GetProjectBadges(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest badges: %w", err)
+		return result
+	}
+
+	// Build lookup by link_url+image_url as composite key
+	badgeKey := func(b gitlab.Badge) string { return b.LinkURL + "|" + b.ImageURL }
+
+	srcByKey := make(map[string]gitlab.Badge, len(srcBadges))
+	for _, b := range srcBadges {
+		srcByKey[badgeKey(b)] = b
+	}
+	dstByKey := make(map[string]gitlab.Badge, len(dstBadges))
+	for _, b := range dstBadges {
+		dstByKey[badgeKey(b)] = b
+	}
+
+	// Delete dest badges not present on source
+	for key, dstBadge := range dstByKey {
+		if _, exists := srcByKey[key]; !exists {
+			if c.dryRun {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    dstBadge.Name,
+					Action: internal.ActionUpdated, // represents "would delete"
+					DryRun: true,
+					Error:  fmt.Errorf("extra badge on dest would be deleted"),
+				})
+				continue
+			}
+			if err := c.dst.DeleteProjectBadge(projectPath, dstBadge.ID); err != nil {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    dstBadge.Name,
+					Action: internal.ActionFailed,
+					Error:  fmt.Errorf("deleting extra badge: %w", err),
+				})
+			}
+		}
+	}
+
+	// Create source badges missing on dest
+	sort.Slice(srcBadges, func(i, j int) bool {
+		return srcBadges[i].Name < srcBadges[j].Name
+	})
+	for _, srcBadge := range srcBadges {
+		key := badgeKey(srcBadge)
+		if _, exists := dstByKey[key]; exists {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    srcBadge.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    srcBadge.Name,
+				Action: internal.ActionCreated,
+				DryRun: true,
+			})
+			continue
+		}
+
+		req := gitlab.BadgeRequest{
+			Name:     srcBadge.Name,
+			LinkURL:  srcBadge.LinkURL,
+			ImageURL: srcBadge.ImageURL,
+		}
+		if err := c.dst.CreateProjectBadge(projectPath, req); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    srcBadge.Name,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    srcBadge.Name,
+				Action: internal.ActionCreated,
+			})
+		}
+	}
+
+	return result
+}
+
+// --- project_protected_branches ---
+
+// Protected branches are matched by name.
+// Existing branches that differ are deleted and recreated (GitLab has no PUT).
+// Only role-based access levels are copied — user/group specific ones are skipped
+// as those IDs are instance-specific.
+func (c *ProjectCopier) copyProtectedBranches(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "project_protected_branches"}
+
+	srcBranches, err := c.src.GetProjectProtectedBranches(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source protected branches: %w", err)
+		return result
+	}
+	dstBranches, err := c.dst.GetProjectProtectedBranches(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest protected branches: %w", err)
+		return result
+	}
+
+	dstByName := make(map[string]gitlab.ProtectedBranch, len(dstBranches))
+	for _, b := range dstBranches {
+		dstByName[b.Name] = b
+	}
+
+	sort.Slice(srcBranches, func(i, j int) bool {
+		return srcBranches[i].Name < srcBranches[j].Name
+	})
+
+	for _, src := range srcBranches {
+		req := gitlab.ProtectedBranchRequestFrom(src)
+		dst, exists := dstByName[src.Name]
+
+		if exists && protectedBranchMatches(src, dst) {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		action := internal.ActionCreated
+		if exists {
+			action = internal.ActionUpdated
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: action,
+				DryRun: true,
+			})
+			continue
+		}
+
+		// DELETE existing branch protection before recreating
+		if exists {
+			if err := c.dst.DeleteProjectProtectedBranch(projectPath, src.Name); err != nil {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.Name,
+					Action: internal.ActionFailed,
+					Error:  fmt.Errorf("deleting existing protection before recreate: %w", err),
+				})
+				continue
+			}
+		}
+
+		if err := c.dst.CreateProjectProtectedBranch(projectPath, req); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			item := internal.ItemResult{Key: src.Name, Action: action}
+			if hasUserGroupAccessLevels(src) {
+				item.Error = fmt.Errorf("user/group-specific access levels not copied — role-based levels only")
+			}
+			result.Items = append(result.Items, item)
+		}
+	}
+
+	return result
+}
+
+// --- project_protected_tags ---
+
+func (c *ProjectCopier) copyProtectedTags(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "project_protected_tags"}
+
+	srcTags, err := c.src.GetProjectProtectedTags(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source protected tags: %w", err)
+		return result
+	}
+	dstTags, err := c.dst.GetProjectProtectedTags(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest protected tags: %w", err)
+		return result
+	}
+
+	dstByName := make(map[string]gitlab.ProtectedTag, len(dstTags))
+	for _, t := range dstTags {
+		dstByName[t.Name] = t
+	}
+
+	sort.Slice(srcTags, func(i, j int) bool {
+		return srcTags[i].Name < srcTags[j].Name
+	})
+
+	for _, src := range srcTags {
+		req := gitlab.ProtectedTagRequestFrom(src)
+		dst, exists := dstByName[src.Name]
+
+		if exists && protectedTagMatches(src, dst) {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		action := internal.ActionCreated
+		if exists {
+			action = internal.ActionUpdated
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: action,
+				DryRun: true,
+			})
+			continue
+		}
+
+		if exists {
+			if err := c.dst.DeleteProjectProtectedTag(projectPath, src.Name); err != nil {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.Name,
+					Action: internal.ActionFailed,
+					Error:  fmt.Errorf("deleting existing tag protection before recreate: %w", err),
+				})
+				continue
+			}
+		}
+
+		if err := c.dst.CreateProjectProtectedTag(projectPath, req); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			item := internal.ItemResult{Key: src.Name, Action: action}
+			if hasUserGroupTagAccessLevels(src) {
+				item.Error = fmt.Errorf("user/group-specific access levels not copied — role-based levels only")
+			}
+			result.Items = append(result.Items, item)
+		}
+	}
+
+	return result
+}
+
 // --- helpers ---
 
 // topicsEqual returns true if two topic slices contain the same elements
@@ -701,4 +973,65 @@ func topicsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func protectedBranchMatches(src, dst gitlab.ProtectedBranch) bool {
+	if src.AllowForcePush != dst.AllowForcePush ||
+		src.CodeOwnerApprovalRequired != dst.CodeOwnerApprovalRequired {
+		return false
+	}
+	return accessLevelsMatch(src.PushAccessLevels, dst.PushAccessLevels) &&
+		accessLevelsMatch(src.MergeAccessLevels, dst.MergeAccessLevels) &&
+		accessLevelsMatch(src.UnprotectAccessLevels, dst.UnprotectAccessLevels)
+}
+
+func protectedTagMatches(src, dst gitlab.ProtectedTag) bool {
+	return accessLevelsMatch(src.CreateAccessLevels, dst.CreateAccessLevels)
+}
+
+// accessLevelsMatch compares role-based access levels only.
+func accessLevelsMatch(src, dst []gitlab.BranchAccessLevel) bool {
+	srcLevels := roleBasedLevels(src)
+	dstLevels := roleBasedLevels(dst)
+	if len(srcLevels) != len(dstLevels) {
+		return false
+	}
+	srcSet := make(map[int]bool, len(srcLevels))
+	for _, l := range srcLevels {
+		srcSet[l] = true
+	}
+	for _, l := range dstLevels {
+		if !srcSet[l] {
+			return false
+		}
+	}
+	return true
+}
+
+func roleBasedLevels(levels []gitlab.BranchAccessLevel) []int {
+	var result []int
+	for _, l := range levels {
+		if l.IsRoleBased() {
+			result = append(result, l.AccessLevel)
+		}
+	}
+	return result
+}
+
+func hasUserGroupAccessLevels(b gitlab.ProtectedBranch) bool {
+	for _, al := range append(append(b.PushAccessLevels, b.MergeAccessLevels...), b.UnprotectAccessLevels...) {
+		if !al.IsRoleBased() {
+			return true
+		}
+	}
+	return false
+}
+
+func hasUserGroupTagAccessLevels(t gitlab.ProtectedTag) bool {
+	for _, al := range t.CreateAccessLevels {
+		if !al.IsRoleBased() {
+			return true
+		}
+	}
+	return false
 }

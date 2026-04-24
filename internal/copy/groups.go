@@ -43,6 +43,10 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copyProtectedEnvironments(groupPath)
 	case "approval_rules":
 		return c.copyApprovalRules(groupPath)
+	case "jira_integration":
+		return c.copyJiraIntegration(groupPath)
+	case "compliance_frameworks":
+		return c.copyComplianceFrameworks(groupPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -599,6 +603,139 @@ func (c *GroupCopier) copyVariables(groupPath string) internal.DomainCopyResult 
 				Key:    itemKey,
 				Action: action,
 			})
+		}
+	}
+
+	return result
+}
+
+// --- jira_integration ---
+
+var requiredGroupJiraFields = []string{"password", "url"}
+
+func (c *GroupCopier) copyJiraIntegration(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "jira_integration"}
+
+	src, err := c.src.GetGroupJiraIntegration(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source Jira integration: %w", err)
+		return result
+	}
+	if src == nil {
+		result.Items = []internal.ItemResult{
+			{Key: "jira_integration", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	// Credentials are masked in GET responses — if missing, flag as manual
+	for _, field := range requiredGroupJiraFields {
+		val, ok := src.Properties[field]
+		if !ok || val == nil || val == "" {
+			result.Items = []internal.ItemResult{
+				{
+					Key:    "jira_integration",
+					Action: internal.ActionSkipped,
+					DryRun: c.dryRun,
+					Error:  fmt.Errorf("credentials masked in source API response — configure Jira integration manually on dest"),
+				},
+			}
+			return result
+		}
+	}
+
+	dst, err := c.dst.GetGroupJiraIntegration(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest Jira integration: %w", err)
+		return result
+	}
+
+	action := internal.ActionCreated
+	if dst != nil {
+		action = internal.ActionUpdated
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{
+			{Key: "jira_integration", Action: action, DryRun: true},
+		}
+		return result
+	}
+
+	if err := c.dst.SetGroupJiraIntegration(groupPath, src.Properties); err != nil {
+		result.Items = []internal.ItemResult{
+			{Key: "jira_integration", Action: internal.ActionFailed, Error: err},
+		}
+		return result
+	}
+
+	result.Items = []internal.ItemResult{
+		{
+			Key:    "jira_integration",
+			Action: action,
+			Error:  fmt.Errorf("verify credentials on dest — password/token values may not have transferred correctly"),
+		},
+	}
+	return result
+}
+
+// --- compliance_frameworks ---
+
+func (c *GroupCopier) copyComplianceFrameworks(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "compliance_frameworks"}
+
+	srcFrameworks, err := c.src.GetGroupComplianceFrameworks(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source compliance frameworks: %w", err)
+		return result
+	}
+	dstFrameworks, err := c.dst.GetGroupComplianceFrameworks(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest compliance frameworks: %w", err)
+		return result
+	}
+
+	dstByName := make(map[string]bool, len(dstFrameworks))
+	for _, f := range dstFrameworks {
+		dstByName[f.Name] = true
+	}
+
+	sort.Slice(srcFrameworks, func(i, j int) bool {
+		return srcFrameworks[i].Name < srcFrameworks[j].Name
+	})
+
+	for _, fw := range srcFrameworks {
+		if dstByName[fw.Name] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    fw.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    fw.Name,
+				Action: internal.ActionCreated,
+				DryRun: true,
+			})
+			continue
+		}
+
+		_, err := c.dst.CreateComplianceFramework(groupPath, fw)
+		if err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    fw.Name,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			item := internal.ItemResult{Key: fw.Name, Action: internal.ActionCreated}
+			if fw.PipelineConfigurationFullPath != "" {
+				item.Error = fmt.Errorf("pipeline config path references source instance — verify %q is valid on dest", fw.PipelineConfigurationFullPath)
+			}
+			result.Items = append(result.Items, item)
 		}
 	}
 
