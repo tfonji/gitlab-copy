@@ -37,6 +37,8 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copyMRSettings(groupPath)
 	case "protected_environments":
 		return c.copyProtectedEnvironments(groupPath)
+	case "approval_rules":
+		return c.copyApprovalRules(groupPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -279,6 +281,105 @@ func (c *GroupCopier) copyProtectedEnvironments(groupPath string) internal.Domai
 				Action: internal.ActionCreated,
 			})
 		}
+	}
+
+	return result
+}
+
+// --- approval_rules ---
+
+// Rule types:
+//
+//	any_approver — anyone can approve, no specific users/groups → copies cleanly
+//	regular      — specific users/groups required → copies name+count only, approvers need manual assignment
+//	code_owner   — auto-managed by CODEOWNERS → skipped
+func (c *GroupCopier) copyApprovalRules(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "approval_rules"}
+
+	srcRules, err := c.src.GetGroupApprovalRules(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source approval rules: %w", err)
+		return result
+	}
+	dstRules, err := c.dst.GetGroupApprovalRules(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest approval rules: %w", err)
+		return result
+	}
+
+	dstByName := make(map[string]gitlab.ApprovalRule, len(dstRules))
+	for _, r := range dstRules {
+		dstByName[r.Name] = r
+	}
+
+	sort.Slice(srcRules, func(i, j int) bool {
+		return srcRules[i].Name < srcRules[j].Name
+	})
+
+	for _, src := range srcRules {
+		// code_owner rules are auto-managed by CODEOWNERS — never copy
+		if src.RuleType == "code_owner" {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		req := gitlab.ApprovalRuleRequest{
+			Name:              src.Name,
+			ApprovalsRequired: src.ApprovalsRequired,
+		}
+
+		dst, exists := dstByName[src.Name]
+
+		if exists && dst.ApprovalsRequired == src.ApprovalsRequired {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		action := internal.ActionCreated
+		if exists {
+			action = internal.ActionUpdated
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: action,
+				DryRun: true,
+			})
+			continue
+		}
+
+		var writeErr error
+		if exists {
+			writeErr = c.dst.UpdateGroupApprovalRule(groupPath, dst.ID, req)
+		} else {
+			writeErr = c.dst.CreateGroupApprovalRule(groupPath, req)
+		}
+
+		if writeErr != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionFailed,
+				Error:  writeErr,
+			})
+			continue
+		}
+
+		item := internal.ItemResult{Key: src.Name, Action: action}
+		// For regular rules the rule is created but approvers (user/group IDs)
+		// are instance-specific and cannot be copied — flag for manual follow-up
+		if src.RuleType == "regular" {
+			item.Error = fmt.Errorf("rule created but approvers not copied — user/group IDs are instance-specific, assign manually")
+		}
+		result.Items = append(result.Items, item)
 	}
 
 	return result

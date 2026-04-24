@@ -35,6 +35,12 @@ func (c *ProjectCopier) copyDomain(projectPath, domain string) internal.DomainCo
 		return c.copyEnvironments(projectPath)
 	case "protected_environments":
 		return c.copyProtectedEnvironments(projectPath)
+	case "jira_integration":
+		return c.copyJiraIntegration(projectPath)
+	case "pipeline_triggers":
+		return c.copyPipelineTriggers(projectPath)
+	case "deploy_keys":
+		return c.copyDeployKeys(projectPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -219,6 +225,201 @@ func (c *ProjectCopier) copyProtectedEnvironments(projectPath string) internal.D
 		} else {
 			result.Items = append(result.Items, internal.ItemResult{
 				Key:    env.Name,
+				Action: internal.ActionCreated,
+			})
+		}
+	}
+
+	return result
+}
+
+// --- jira_integration ---
+
+func (c *ProjectCopier) copyJiraIntegration(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "jira_integration"}
+
+	src, err := c.src.GetProjectJiraIntegration(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source Jira integration: %w", err)
+		return result
+	}
+	if src == nil {
+		result.Items = []internal.ItemResult{
+			{Key: "jira_integration", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	dst, err := c.dst.GetProjectJiraIntegration(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest Jira integration: %w", err)
+		return result
+	}
+
+	action := internal.ActionCreated
+	if dst != nil {
+		action = internal.ActionUpdated
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{
+			{Key: "jira_integration", Action: action, DryRun: true},
+		}
+		return result
+	}
+
+	if err := c.dst.SetProjectJiraIntegration(projectPath, src.Properties); err != nil {
+		result.Items = []internal.ItemResult{
+			{Key: "jira_integration", Action: internal.ActionFailed, Error: err},
+		}
+		return result
+	}
+
+	// Credentials (password/token) are masked in API responses and won't
+	// transfer — flag for manual follow-up
+	result.Items = []internal.ItemResult{
+		{
+			Key:    "jira_integration",
+			Action: action,
+			Error:  fmt.Errorf("credentials not copied — verify password/token on dest manually"),
+		},
+	}
+	return result
+}
+
+// --- pipeline_triggers ---
+
+func (c *ProjectCopier) copyPipelineTriggers(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "pipeline_triggers"}
+
+	srcTriggers, err := c.src.GetProjectTriggers(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source triggers: %w", err)
+		return result
+	}
+	dstTriggers, err := c.dst.GetProjectTriggers(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest triggers: %w", err)
+		return result
+	}
+
+	// Index dest by description — not enforced unique but best natural key
+	dstByDesc := make(map[string]bool, len(dstTriggers))
+	for _, t := range dstTriggers {
+		dstByDesc[t.Description] = true
+	}
+
+	sort.Slice(srcTriggers, func(i, j int) bool {
+		return srcTriggers[i].Description < srcTriggers[j].Description
+	})
+
+	for _, trigger := range srcTriggers {
+		if dstByDesc[trigger.Description] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    trigger.Description,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    trigger.Description,
+				Action: internal.ActionCreated,
+				DryRun: true,
+			})
+			continue
+		}
+
+		req := gitlab.PipelineTriggerRequest{Description: trigger.Description}
+		if err := c.dst.CreateProjectTrigger(projectPath, req); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    trigger.Description,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			// Token is auto-generated on dest — cannot be copied from source
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    trigger.Description,
+				Action: internal.ActionCreated,
+				Error:  fmt.Errorf("trigger token is newly generated — update any CI variables referencing the source token"),
+			})
+		}
+	}
+
+	return result
+}
+
+// --- deploy_keys ---
+
+func (c *ProjectCopier) copyDeployKeys(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "deploy_keys"}
+
+	srcKeys, err := c.src.GetProjectDeployKeys(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source deploy keys: %w", err)
+		return result
+	}
+	dstKeys, err := c.dst.GetProjectDeployKeys(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest deploy keys: %w", err)
+		return result
+	}
+
+	// Index dest by title — primary match key
+	dstByTitle := make(map[string]bool, len(dstKeys))
+	for _, k := range dstKeys {
+		dstByTitle[k.Title] = true
+	}
+
+	sort.Slice(srcKeys, func(i, j int) bool {
+		return srcKeys[i].Title < srcKeys[j].Title
+	})
+
+	for _, key := range srcKeys {
+		if dstByTitle[key.Title] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    key.Title,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    key.Title,
+				Action: internal.ActionCreated,
+				DryRun: true,
+			})
+			continue
+		}
+
+		req := gitlab.DeployKeyRequest{
+			Title:   key.Title,
+			Key:     key.Key,
+			CanPush: key.CanPush,
+		}
+		if err := c.dst.CreateProjectDeployKey(projectPath, req); err != nil {
+			// 422 means the public key already exists globally on the dest instance
+			if apiErr, ok := err.(*gitlab.APIError); ok && apiErr.StatusCode == 422 {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    key.Title,
+					Action: internal.ActionFailed,
+					Error:  fmt.Errorf("key already exists on dest instance — enable it manually via Settings > Repository > Deploy Keys"),
+				})
+			} else {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    key.Title,
+					Action: internal.ActionFailed,
+					Error:  err,
+				})
+			}
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    key.Title,
 				Action: internal.ActionCreated,
 			})
 		}

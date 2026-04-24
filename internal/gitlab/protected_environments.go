@@ -28,10 +28,10 @@ type EnvironmentApprovalRule struct {
 // and will NOT transfer correctly across instances. Only role-based
 // access levels (UserID == nil && GroupID == nil) copy cleanly.
 type ProtectedEnvironmentRequest struct {
-	Name                  string                `json:"name"`
-	DeployAccessLevels    []AccessLevelRequest  `json:"deploy_access_levels"`
-	RequiredApprovalCount int                   `json:"required_approval_count"`
-	ApprovalRules         []ApprovalRuleRequest `json:"approval_rules,omitempty"`
+	Name                  string                   `json:"name"`
+	DeployAccessLevels    []AccessLevelRequest     `json:"deploy_access_levels"`
+	RequiredApprovalCount int                      `json:"required_approval_count"`
+	ApprovalRules         []EnvApprovalRuleRequest `json:"approval_rules,omitempty"`
 }
 
 type AccessLevelRequest struct {
@@ -40,7 +40,7 @@ type AccessLevelRequest struct {
 	GroupID     *int `json:"group_id,omitempty"`
 }
 
-type ApprovalRuleRequest struct {
+type EnvApprovalRuleRequest struct {
 	AccessLevel       int  `json:"access_level,omitempty"`
 	UserID            *int `json:"user_id,omitempty"`
 	GroupID           *int `json:"group_id,omitempty"`
@@ -61,7 +61,7 @@ func ProtectedEnvironmentRequestFrom(pe ProtectedEnvironment) ProtectedEnvironme
 		})
 	}
 	for _, ar := range pe.ApprovalRules {
-		req.ApprovalRules = append(req.ApprovalRules, ApprovalRuleRequest{
+		req.ApprovalRules = append(req.ApprovalRules, EnvApprovalRuleRequest{
 			AccessLevel:       ar.AccessLevel,
 			UserID:            ar.UserID,
 			GroupID:           ar.GroupID,

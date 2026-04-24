@@ -56,12 +56,16 @@ var DefaultGroupDomains = []string{
 	"default_branch_name",
 	"mr_settings",
 	"protected_environments",
+	"approval_rules",
 }
 
 var DefaultProjectDomains = []string{
 	"topics",
 	"environments",
 	"protected_environments",
+	"jira_integration",
+	"pipeline_triggers",
+	"deploy_keys",
 }
 
 func Load(path string) (*Config, error) {
