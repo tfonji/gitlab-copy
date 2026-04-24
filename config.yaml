@@ -1,0 +1,42 @@
+source:
+  url: https://source.example.com
+  token_env: SOURCE_GITLAB_TOKEN
+
+destination:
+  url: https://dest.example.com
+  token_env: DEST_GITLAB_TOKEN
+
+groups:
+  include:
+    - my-group
+  exclude: []
+  include_subgroups: true
+
+projects:
+  include: []        # empty = derive from groups
+  exclude: []
+  include_subgroups: true
+  include_archived: false
+
+concurrency:
+  groups: 5
+  projects: 10
+
+# Tier 1 defaults — comment out domains you don't need
+domains:
+  groups:
+    - push_rules
+    - default_branch_name
+    - mr_settings
+    - protected_environments
+  projects:
+    - topics
+    - environments
+    - protected_environments
+
+output:
+  dir: ./gl-copy-report
+  formats:
+    - terminal
+    - html
+    - json
