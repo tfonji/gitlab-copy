@@ -3,6 +3,7 @@ package copy
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"gitlab-copy/internal"
 	"gitlab-copy/internal/gitlab"
@@ -241,6 +242,10 @@ func (c *ProjectCopier) copyProtectedEnvironments(projectPath string) internal.D
 
 // --- jira_integration ---
 
+// requiredJiraFields are fields the GitLab Jira integration API requires on PUT.
+// These are typically masked in GET responses — if missing, the copy cannot proceed.
+var requiredJiraFields = []string{"password", "url"}
+
 func (c *ProjectCopier) copyJiraIntegration(projectPath string) internal.DomainCopyResult {
 	result := internal.DomainCopyResult{Domain: "jira_integration"}
 
@@ -254,6 +259,24 @@ func (c *ProjectCopier) copyJiraIntegration(projectPath string) internal.DomainC
 			{Key: "jira_integration", Action: internal.ActionSkipped, DryRun: c.dryRun},
 		}
 		return result
+	}
+
+	// Check that required credential fields are present and non-empty.
+	// The GitLab API masks these in GET responses — if any are missing,
+	// the PUT will fail with 400. Flag as manual rather than attempting a doomed write.
+	for _, field := range requiredJiraFields {
+		val, ok := src.Properties[field]
+		if !ok || val == nil || val == "" {
+			result.Items = []internal.ItemResult{
+				{
+					Key:    "jira_integration",
+					Action: internal.ActionSkipped,
+					DryRun: c.dryRun,
+					Error:  fmt.Errorf("credentials masked in source API response — configure Jira integration manually on dest"),
+				},
+			}
+			return result
+		}
 	}
 
 	dst, err := c.dst.GetProjectJiraIntegration(projectPath)
@@ -281,13 +304,11 @@ func (c *ProjectCopier) copyJiraIntegration(projectPath string) internal.DomainC
 		return result
 	}
 
-	// Credentials (password/token) are masked in API responses and won't
-	// transfer — flag for manual follow-up
 	result.Items = []internal.ItemResult{
 		{
 			Key:    "jira_integration",
 			Action: action,
-			Error:  fmt.Errorf("credentials not copied — verify password/token on dest manually"),
+			Error:  fmt.Errorf("verify credentials on dest — password/token values may not have transferred correctly"),
 		},
 	}
 	return result
@@ -631,6 +652,19 @@ func (c *ProjectCopier) copyProjectApprovalRules(projectPath string) internal.Do
 		}
 
 		if writeErr != nil {
+			// GitLab only allows one any-approver rule per project.
+			// If dest already has one, treat this as a skip rather than a failure.
+			if apiErr, ok := writeErr.(*gitlab.APIError); ok && apiErr.StatusCode == 400 {
+				if strings.Contains(apiErr.Body, "any-approver") {
+					result.Items = append(result.Items, internal.ItemResult{
+						Key:    src.Name,
+						Action: internal.ActionSkipped,
+						DryRun: c.dryRun,
+						Error:  fmt.Errorf("any-approver rule already exists on dest — skipped"),
+					})
+					continue
+				}
+			}
 			result.Items = append(result.Items, internal.ItemResult{
 				Key:    src.Name,
 				Action: internal.ActionFailed,
