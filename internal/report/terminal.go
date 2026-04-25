@@ -131,11 +131,11 @@ func (t *Terminal) writeItem(indent string, item internal.ItemResult) {
 	}
 	// Render diff lines indented under the item
 	for _, diff := range item.Diffs {
-		t.writef("%s  %s%s%s: %s%s%s → %s%s%s\n",
+		t.writef("%s  %s%s%s  %sdest:%s %s%s%s  %s→ source:%s %s%s%s\n",
 			indent,
 			colorDim, diff.Field, colorReset,
-			colorRed, diff.Dst, colorReset,
-			colorGreen, diff.Src, colorReset)
+			colorRed, colorReset, colorRed, diff.Dst, colorReset,
+			colorGreen, colorReset, colorGreen, diff.Src, colorReset)
 	}
 }
 
