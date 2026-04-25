@@ -6,50 +6,79 @@ destination:
   url: https://dest.example.com
   token_env: DEST_GITLAB_TOKEN
 
+# ---------------------------------------------------------------------------
+# Group targeting
+# ---------------------------------------------------------------------------
 groups:
   include:
-    - my-group
-  exclude: []
-  include_subgroups: true
+    - my-group                        # top-level group path(s) to process
+  exclude: []                         # exclusion patterns (see below)
+  include_subgroups: true             # recurse into subgroups
 
+  # Exclusion pattern examples:
+  #   - my-group/subgroup               exact path
+  #   - my-group/dast_*                 single-level glob
+  #   - my-group/dast/*                 all descendants at any depth
+
+# ---------------------------------------------------------------------------
+# Project targeting
+# ---------------------------------------------------------------------------
 projects:
-  include: []        # empty = derive from groups
-  exclude: []
-  include_subgroups: true
-  include_archived: false
+  include: []                         # explicit project paths — if set, groups.include is not required
+  # empty = derive all projects from groups.include
+  exclude: []                         # exclusion patterns (same syntax as groups.exclude)
+  include_subgroups: true             # include projects in subgroups when deriving from groups
+  include_archived: false             # include archived projects
 
+# ---------------------------------------------------------------------------
+# Concurrency — parallel API calls
+# ---------------------------------------------------------------------------
 concurrency:
   groups: 5
   projects: 10
 
-# Tier 1 defaults — comment out domains you don't need
+# ---------------------------------------------------------------------------
+# Domains — what to copy
+# Comment out any domain you want to skip.
+# ---------------------------------------------------------------------------
 domains:
   groups:
-    - push_rules
-    - description
-    - default_branch_name
-    - mr_settings
-    - mr_approval_settings
-    - protected_environments
-    - approval_rules
-    - jira_integration
-  projects:
-    - topics
-    - environments
-    - protected_environments
-    - jira_integration
-    - pipeline_triggers
-    - deploy_keys
-    - project_push_rules
-    - project_mr_approvals
-    - project_approval_rules
-    - badges
-    - project_protected_branches
-    - project_protected_tags
+    - push_rules                      # commit message regex, branch name rules, file size limits
+    - description                     # group description
+    - default_branch_name             # default branch for new projects in the group
+    - mr_settings                     # merge-if-pipeline-succeeds, resolve-all-discussions
+    - mr_approval_settings            # author/committer approval, override permissions, retain approvals on push
+    - protected_environments          # role-based deploy access per named environment
+    - approval_rules                  # MR approval rule names and required counts (approvers need manual assignment)
+    - jira_integration                # Jira integration config (credentials require manual verification on dest)
 
+  projects:
+    - topics                          # project tags/labels (AppID, CMDB ID, etc.)
+    - environments                    # deployment environments with external URLs
+    - protected_environments          # role-based deploy access per environment
+    - jira_integration                # Jira integration config (credentials require manual verification on dest)
+    - pipeline_triggers               # CI trigger tokens (new token generated on dest — update any CI variable references)
+    - deploy_keys                     # SSH deploy keys (globally existing keys flagged for manual enable)
+    - project_push_rules              # project-level commit and branch push rules
+    - project_mr_approvals            # project-level MR approval settings
+    - project_approval_rules          # project-level approval rules (approvers need manual assignment)
+    - badges                          # pipeline status and coverage badges
+    - project_protected_branches      # branch protection rules (role-based access levels only)
+    - project_protected_tags          # tag protection rules (role-based access levels only)
+
+  # Domains NOT listed here (cannot be automated):
+  #   security_policies       — no API for linking a policy project, configure via UI
+  #   access_tokens           — token value only shown at creation, create manually on dest
+  #   deploy_tokens           — secrets cannot be exported, regenerate on dest
+  #   masked/hidden variables — values are masked in API responses, create manually on dest
+  #   compliance_frameworks   — GraphQL mutations available but not enabled by default
+
+# ---------------------------------------------------------------------------
+# Report output
+# ---------------------------------------------------------------------------
 output:
-  dir: ./gl-copy-report
+  dir: ./gl-copy-report               # directory for HTML and JSON reports
   formats:
-    - terminal
-    - html
-    - json
+    - terminal                        # colored output during the run
+    - html                            # tabbed HTML report with collapsible cards
+    - json                            # machine-readable output for pipeline integration
