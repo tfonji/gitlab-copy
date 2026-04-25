@@ -1,10 +1,14 @@
+# gitlab-copy configuration
+# Copy settings from source to destination GitLab instance.
+# See README.md for full usage guide.
+
 source:
   url: https://source.example.com
-  token_env: SOURCE_GITLAB_TOKEN
+  token_env: SOURCE_GITLAB_TOKEN      # env var name holding the source API token (api scope)
 
 destination:
   url: https://dest.example.com
-  token_env: DEST_GITLAB_TOKEN
+  token_env: DEST_GITLAB_TOKEN        # env var name holding the dest API token (api scope, Owner on groups)
 
 # ---------------------------------------------------------------------------
 # Group targeting
@@ -15,10 +19,10 @@ groups:
   exclude: []                         # exclusion patterns (see below)
   include_subgroups: true             # recurse into subgroups
 
-  # Exclusion pattern examples:
-  #   - my-group/subgroup               exact path
-  #   - my-group/dast_*                 single-level glob
-  #   - my-group/dast/*                 all descendants at any depth
+# Exclusion pattern examples:
+#   - my-group/subgroup               exact path
+#   - my-group/dast_*                 single-level glob
+#   - my-group/dast/*                 all descendants at any depth
 
 # ---------------------------------------------------------------------------
 # Project targeting
@@ -52,6 +56,8 @@ domains:
     - approval_rules                  # MR approval rule names and required counts (approvers need manual assignment)
     - jira_integration                # Jira integration config (credentials require manual verification on dest)
     - badges                          # group-level badges (inherited by all projects in the group)
+    - compliance_frameworks           # compliance framework definitions (name, description, color, pipeline config)
+    - compliance_assignments          # which projects have which frameworks assigned (run after compliance_frameworks)
 
   projects:
     - topics                          # project tags/labels (AppID, CMDB ID, etc.)
@@ -67,12 +73,11 @@ domains:
     - project_protected_branches      # branch protection rules (role-based access levels only)
     - project_protected_tags          # tag protection rules (role-based access levels only)
 
-  # Domains NOT listed here (cannot be automated):
-  #   security_policies       — no API for linking a policy project, configure via UI
-  #   access_tokens           — token value only shown at creation, create manually on dest
-  #   deploy_tokens           — secrets cannot be exported, regenerate on dest
-  #   masked/hidden variables — values are masked in API responses, create manually on dest
-  #   compliance_frameworks   — GraphQL mutations available but not enabled by default
+# Domains NOT listed here (cannot be automated):
+#   security_policies       — no API for linking a policy project, configure via UI
+#   access_tokens           — token value only shown at creation, create manually on dest
+#   deploy_tokens           — secrets cannot be exported, regenerate on dest
+#   masked/hidden variables — values are masked in API responses, create manually on dest
 
 # ---------------------------------------------------------------------------
 # Report output
@@ -83,4 +88,3 @@ output:
     - terminal                        # colored output during the run
     - html                            # tabbed HTML report with collapsible cards
     - json                            # machine-readable output for pipeline integration
- 

@@ -13,7 +13,13 @@ type ComplianceFramework struct {
 	ProjectCount                  int    `json:"project_count"`
 }
 
-// --- Read (GraphQL) ---
+// ComplianceAssignment maps a project path to the framework names assigned to it.
+type ComplianceAssignment struct {
+	ProjectPath    string
+	FrameworkNames []string
+}
+
+// --- Read frameworks (GraphQL) ---
 
 type complianceFrameworksData struct {
 	Namespace struct {
@@ -73,7 +79,88 @@ func (c *Client) GetGroupComplianceFrameworks(groupPath string) ([]ComplianceFra
 	return frameworks, nil
 }
 
-// --- Write (GraphQL mutations) ---
+// --- Read assignments (GraphQL) ---
+// Returns all project paths under the group that have at least one compliance framework assigned.
+
+type complianceAssignmentsData struct {
+	Group struct {
+		Projects struct {
+			Nodes []struct {
+				FullPath             string `json:"fullPath"`
+				ComplianceFrameworks struct {
+					Nodes []struct {
+						Name string `json:"name"`
+					} `json:"nodes"`
+				} `json:"complianceFrameworks"`
+			} `json:"nodes"`
+			PageInfo struct {
+				HasNextPage bool   `json:"hasNextPage"`
+				EndCursor   string `json:"endCursor"`
+			} `json:"pageInfo"`
+		} `json:"projects"`
+	} `json:"group"`
+}
+
+const complianceAssignmentsQuery = `
+query($fullPath: ID!, $after: String) {
+  group(fullPath: $fullPath) {
+    projects(after: $after, includeSubgroups: true, first: 100) {
+      nodes {
+        fullPath
+        complianceFrameworks {
+          nodes {
+            name
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}`
+
+func (c *Client) GetGroupComplianceAssignments(groupPath string) ([]ComplianceAssignment, error) {
+	var all []ComplianceAssignment
+	var cursor *string
+
+	for {
+		vars := map[string]any{"fullPath": groupPath}
+		if cursor != nil {
+			vars["after"] = *cursor
+		}
+
+		var data complianceAssignmentsData
+		if err := c.graphql(complianceAssignmentsQuery, vars, &data); err != nil {
+			return nil, err
+		}
+
+		for _, proj := range data.Group.Projects.Nodes {
+			if len(proj.ComplianceFrameworks.Nodes) == 0 {
+				continue
+			}
+			names := make([]string, 0, len(proj.ComplianceFrameworks.Nodes))
+			for _, fw := range proj.ComplianceFrameworks.Nodes {
+				names = append(names, fw.Name)
+			}
+			all = append(all, ComplianceAssignment{
+				ProjectPath:    proj.FullPath,
+				FrameworkNames: names,
+			})
+		}
+
+		if !data.Group.Projects.PageInfo.HasNextPage {
+			break
+		}
+		c := data.Group.Projects.PageInfo.EndCursor
+		cursor = &c
+	}
+
+	return all, nil
+}
+
+// --- Write frameworks (GraphQL mutations) ---
 
 type createFrameworkData struct {
 	CreateComplianceFramework struct {
@@ -118,4 +205,34 @@ func (c *Client) CreateComplianceFramework(groupPath string, f ComplianceFramewo
 		return "", fmt.Errorf("createComplianceFramework: %s", data.CreateComplianceFramework.Errors[0])
 	}
 	return data.CreateComplianceFramework.Framework.ID, nil
+}
+
+// --- Write assignments (GraphQL mutation) ---
+
+type assignFrameworkData struct {
+	AssignComplianceFramework struct {
+		Errors []string `json:"errors"`
+	} `json:"assignComplianceFramework"`
+}
+
+const assignComplianceFrameworkMutation = `
+mutation($projectPath: ID!, $frameworkId: ComplianceManagementFrameworkID!) {
+  assignComplianceFramework(input: { projectPath: $projectPath, frameworkId: $frameworkId }) {
+    errors
+  }
+}`
+
+func (c *Client) AssignComplianceFramework(projectPath string, frameworkID string) error {
+	var data assignFrameworkData
+	err := c.graphql(assignComplianceFrameworkMutation, map[string]any{
+		"projectPath": projectPath,
+		"frameworkId": frameworkID,
+	}, &data)
+	if err != nil {
+		return err
+	}
+	if len(data.AssignComplianceFramework.Errors) > 0 {
+		return fmt.Errorf("assignComplianceFramework: %s", data.AssignComplianceFramework.Errors[0])
+	}
+	return nil
 }

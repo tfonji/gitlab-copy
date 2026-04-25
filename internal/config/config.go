@@ -61,6 +61,8 @@ var DefaultGroupDomains = []string{
 	"approval_rules",
 	"jira_integration",
 	"badges",
+	"compliance_frameworks",
+	"compliance_assignments",
 }
 
 var DefaultProjectDomains = []string{

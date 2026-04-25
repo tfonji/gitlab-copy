@@ -47,6 +47,10 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copyJiraIntegration(groupPath)
 	case "badges":
 		return c.copyGroupBadges(groupPath)
+	case "compliance_frameworks":
+		return c.copyComplianceFrameworks(groupPath)
+	case "compliance_assignments":
+		return c.copyComplianceAssignments(groupPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -823,6 +827,107 @@ func (c *GroupCopier) copyGroupBadges(groupPath string) internal.DomainCopyResul
 				Key:    srcBadge.Name,
 				Action: internal.ActionCreated,
 			})
+		}
+	}
+
+	return result
+}
+
+// --- compliance_assignments ---
+
+// copyComplianceAssignments assigns compliance frameworks to projects on dest
+// matching the source assignments. It resolves dest framework IDs by name —
+// so compliance_frameworks should be run before this domain to ensure frameworks
+// exist on dest.
+func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "compliance_assignments"}
+
+	srcAssignments, err := c.src.GetGroupComplianceAssignments(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source compliance assignments: %w", err)
+		return result
+	}
+	if len(srcAssignments) == 0 {
+		return result
+	}
+
+	// Build dest framework name→ID map
+	dstFrameworks, err := c.dst.GetGroupComplianceFrameworks(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest compliance frameworks: %w", err)
+		return result
+	}
+	dstIDByName := make(map[string]string, len(dstFrameworks))
+	for _, fw := range dstFrameworks {
+		dstIDByName[fw.Name] = fw.ID
+	}
+
+	// Build dest assignment index: projectPath → set of framework names already assigned
+	dstAssignments, err := c.dst.GetGroupComplianceAssignments(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest compliance assignments: %w", err)
+		return result
+	}
+	dstAssigned := make(map[string]map[string]bool)
+	for _, a := range dstAssignments {
+		names := make(map[string]bool, len(a.FrameworkNames))
+		for _, n := range a.FrameworkNames {
+			names[n] = true
+		}
+		dstAssigned[a.ProjectPath] = names
+	}
+
+	sort.Slice(srcAssignments, func(i, j int) bool {
+		return srcAssignments[i].ProjectPath < srcAssignments[j].ProjectPath
+	})
+
+	for _, assignment := range srcAssignments {
+		for _, fwName := range assignment.FrameworkNames {
+			itemKey := assignment.ProjectPath + " → " + fwName
+
+			// Already assigned on dest
+			if dstAssigned[assignment.ProjectPath][fwName] {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    itemKey,
+					Action: internal.ActionSkipped,
+					DryRun: c.dryRun,
+				})
+				continue
+			}
+
+			// Framework doesn't exist on dest yet
+			dstID, ok := dstIDByName[fwName]
+			if !ok {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    itemKey,
+					Action: internal.ActionSkipped,
+					DryRun: c.dryRun,
+					Error:  fmt.Errorf("framework %q not found on dest — run compliance_frameworks first", fwName),
+				})
+				continue
+			}
+
+			if c.dryRun {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    itemKey,
+					Action: internal.ActionCreated,
+					DryRun: true,
+				})
+				continue
+			}
+
+			if err := c.dst.AssignComplianceFramework(assignment.ProjectPath, dstID); err != nil {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    itemKey,
+					Action: internal.ActionFailed,
+					Error:  err,
+				})
+			} else {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    itemKey,
+					Action: internal.ActionCreated,
+				})
+			}
 		}
 	}
 
