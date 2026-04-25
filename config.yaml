@@ -50,6 +50,7 @@ domains:
     - push_rules                      # commit message regex, branch name rules, file size limits
     - description                     # group description
     - default_branch_name             # default branch for new projects in the group
+    - default_branch_protection       # default branch protection rules applied to new projects (allowed_to_push, allowed_to_merge, force_push)
     - mr_settings                     # merge-if-pipeline-succeeds, resolve-all-discussions
     - mr_approval_settings            # author/committer approval, override permissions, retain approvals on push
     - protected_environments          # role-based deploy access per named environment

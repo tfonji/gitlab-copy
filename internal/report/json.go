@@ -3,24 +3,33 @@ package report
 import (
 	"encoding/json"
 	"fmt"
-	"gitlab-copy/internal"
 	"os"
 	"path/filepath"
+	"time"
+
+	"gitlab-copy/internal"
 )
 
 func WriteJSON(result *internal.RunResult, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
-	filename := fmt.Sprintf("gitlab-copy.json")
+	timestamp := time.Now().Format("20060102-150405")
+	filename := fmt.Sprintf("gitlab-copy-%s.json", timestamp)
 	path := filepath.Join(dir, filename)
 
 	// Serialize errors as strings for JSON output
+	type jsonDiff struct {
+		Field string `json:"field"`
+		Src   string `json:"src"`
+		Dst   string `json:"dst"`
+	}
 	type jsonItem struct {
-		Key    string `json:"key"`
-		Action string `json:"action"`
-		DryRun bool   `json:"dry_run"`
-		Error  string `json:"error,omitempty"`
+		Key    string     `json:"key"`
+		Action string     `json:"action"`
+		DryRun bool       `json:"dry_run"`
+		Error  string     `json:"error,omitempty"`
+		Diffs  []jsonDiff `json:"diffs,omitempty"`
 	}
 	type jsonDomain struct {
 		Domain string     `json:"domain"`
@@ -52,6 +61,9 @@ func WriteJSON(result *internal.RunResult, dir string) (string, error) {
 			ji := jsonItem{Key: item.Key, Action: item.Label(), DryRun: item.DryRun}
 			if item.Error != nil {
 				ji.Error = item.Error.Error()
+			}
+			for _, d := range item.Diffs {
+				ji.Diffs = append(ji.Diffs, jsonDiff{Field: d.Field, Src: d.Src, Dst: d.Dst})
 			}
 			jd.Items = append(jd.Items, ji)
 		}

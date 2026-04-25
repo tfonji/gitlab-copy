@@ -183,12 +183,15 @@ For groups migrated in earlier batches, use `projects all` in step 2 and 3 to av
 | `push_rules` | Commit message regex, branch name rules, file size limits |
 | `description` | Group description |
 | `default_branch_name` | Default branch for new projects |
+| `default_branch_protection` | Default branch protection rules applied to new projects (who can push, merge, force push) |
 | `mr_settings` | Merge-if-pipeline-succeeds, resolve-all-discussions policies |
 | `mr_approval_settings` | Author/committer approval, override permissions, retain approvals on push |
 | `protected_environments` | Which roles can deploy to named environments |
 | `approval_rules` | MR approval rule names and required counts (approvers need manual assignment) |
 | `jira_integration` | Jira integration config (credentials require manual verification) |
 | `badges` | Group-level badges inherited by all projects in the group |
+| `compliance_frameworks` | Compliance framework definitions (name, description, color, pipeline config path) |
+| `compliance_assignments` | Which projects have which frameworks assigned — run after `compliance_frameworks` |
 
 ### Project domains
 

@@ -5,11 +5,13 @@ package gitlab
 // this lets default_branch_name and mr_settings each issue a targeted PUT
 // without clobbering fields they don't own.
 type GroupUpdateRequest struct {
-	Description                               *string `json:"description,omitempty"`
-	DefaultBranchName                         *string `json:"default_branch_name,omitempty"`
-	OnlyAllowMergeIfPipelineSucceeds          *bool   `json:"only_allow_merge_if_pipeline_succeeds,omitempty"`
-	OnlyAllowMergeIfAllDiscussionsAreResolved *bool   `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty"`
-	PreventMergeWithoutJiraIssue              *bool   `json:"prevent_merge_without_jira_issue,omitempty"`
+	Description                               *string                          `json:"description,omitempty"`
+	DefaultBranchName                         *string                          `json:"default_branch_name,omitempty"`
+	DefaultBranchProtection                   *int                             `json:"default_branch_protection,omitempty"`
+	DefaultBranchProtectionDefaults           *DefaultBranchProtectionDefaults `json:"default_branch_protection_defaults,omitempty"`
+	OnlyAllowMergeIfPipelineSucceeds          *bool                            `json:"only_allow_merge_if_pipeline_succeeds,omitempty"`
+	OnlyAllowMergeIfAllDiscussionsAreResolved *bool                            `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty"`
+	PreventMergeWithoutJiraIssue              *bool                            `json:"prevent_merge_without_jira_issue,omitempty"`
 }
 
 // UpdateGroup issues a PUT /groups/:id with the provided fields.
@@ -20,3 +22,4 @@ func (c *Client) UpdateGroup(groupPath string, req GroupUpdateRequest) error {
 // Helper constructors so callers don't need to take addresses of literals.
 func StrPtr(s string) *string { return &s }
 func BoolPtr(b bool) *bool    { return &b }
+func IntPtr(i int) *int       { return &i }

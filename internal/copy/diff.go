@@ -115,7 +115,51 @@ func protectedTagDiffs(src, dst gitlab.ProtectedTag) []internal.DiffLine {
 	return diffs
 }
 
-// accessLevelDesc returns a human-readable summary of role-based access levels.
+// defaultBranchProtectionDiffs returns diff lines for group default branch protection.
+func defaultBranchProtectionDiffs(src, dst *gitlab.Group) []internal.DiffLine {
+	var diffs []internal.DiffLine
+	fieldDiff(&diffs, "default_branch_protection", src.DefaultBranchProtection, dst.DefaultBranchProtection)
+
+	// Compare defaults struct if both have it
+	sd := src.DefaultBranchProtectionDefaults
+	dd := dst.DefaultBranchProtectionDefaults
+	if sd != nil || dd != nil {
+		srcForcePush := false
+		dstForcePush := false
+		srcDevInitial := false
+		dstDevInitial := false
+		if sd != nil {
+			srcForcePush = sd.AllowForcePush
+			srcDevInitial = sd.DeveloperCanInitialPush
+		}
+		if dd != nil {
+			dstForcePush = dd.AllowForcePush
+			dstDevInitial = dd.DeveloperCanInitialPush
+		}
+		fieldDiff(&diffs, "default_branch_protection_defaults.allow_force_push", srcForcePush, dstForcePush)
+		fieldDiff(&diffs, "default_branch_protection_defaults.developer_can_initial_push", srcDevInitial, dstDevInitial)
+
+		srcPush := "[]"
+		dstPush := "[]"
+		srcMerge := "[]"
+		dstMerge := "[]"
+		if sd != nil {
+			srcPush = fmt.Sprintf("%v", sd.AllowedToPush)
+			srcMerge = fmt.Sprintf("%v", sd.AllowedToMerge)
+		}
+		if dd != nil {
+			dstPush = fmt.Sprintf("%v", dd.AllowedToPush)
+			dstMerge = fmt.Sprintf("%v", dd.AllowedToMerge)
+		}
+		if srcPush != dstPush {
+			diffs = append(diffs, internal.DiffLine{Field: "default_branch_protection_defaults.allowed_to_push", Src: srcPush, Dst: dstPush})
+		}
+		if srcMerge != dstMerge {
+			diffs = append(diffs, internal.DiffLine{Field: "default_branch_protection_defaults.allowed_to_merge", Src: srcMerge, Dst: dstMerge})
+		}
+	}
+	return diffs
+}
 func accessLevelDesc(levels []gitlab.BranchAccessLevel) string {
 	var parts []string
 	for _, l := range levels {

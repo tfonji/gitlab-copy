@@ -35,6 +35,8 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copyDescription(groupPath)
 	case "default_branch_name":
 		return c.copyDefaultBranchName(groupPath)
+	case "default_branch_protection":
+		return c.copyDefaultBranchProtection(groupPath)
 	case "mr_settings":
 		return c.copyMRSettings(groupPath)
 	case "mr_approval_settings":
@@ -183,6 +185,54 @@ func (c *GroupCopier) copyDefaultBranchName(groupPath string) internal.DomainCop
 
 	result.Items = []internal.ItemResult{
 		{Key: "default_branch_name", Action: internal.ActionUpdated, Diffs: diffs},
+	}
+	return result
+}
+
+// --- default_branch_protection ---
+
+func (c *GroupCopier) copyDefaultBranchProtection(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "default_branch_protection"}
+
+	src, err := c.src.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source group: %w", err)
+		return result
+	}
+	dst, err := c.dst.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest group: %w", err)
+		return result
+	}
+
+	diffs := defaultBranchProtectionDiffs(src, dst)
+	if len(diffs) == 0 {
+		result.Items = []internal.ItemResult{
+			{Key: "default_branch_protection", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{
+			{Key: "default_branch_protection", Action: internal.ActionUpdated, DryRun: true, Diffs: diffs},
+		}
+		return result
+	}
+
+	req := gitlab.GroupUpdateRequest{
+		DefaultBranchProtection:         gitlab.IntPtr(src.DefaultBranchProtection),
+		DefaultBranchProtectionDefaults: src.DefaultBranchProtectionDefaults,
+	}
+	if err := c.dst.UpdateGroup(groupPath, req); err != nil {
+		result.Items = []internal.ItemResult{
+			{Key: "default_branch_protection", Action: internal.ActionFailed, Error: err},
+		}
+		return result
+	}
+
+	result.Items = []internal.ItemResult{
+		{Key: "default_branch_protection", Action: internal.ActionUpdated, Diffs: diffs},
 	}
 	return result
 }
