@@ -100,14 +100,10 @@ func main() {
 		scope = "projects"
 	}
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.LoadWithOverrides(*configPath, *singleGroup, *singleProj)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 		os.Exit(1)
-	}
-
-	if *singleGroup != "" {
-		cfg.Groups.Include = []string{*singleGroup}
 	}
 
 	if *dryRun {
@@ -117,7 +113,7 @@ func main() {
 	srcClient := gitlab.NewClient(cfg.Source.URL, cfg.Source.Token())
 	dstClient := gitlab.NewClient(cfg.Destination.URL, cfg.Destination.Token())
 
-	result := run(scope, *singleProj, *dryRun, cfg, srcClient, dstClient)
+	result := run(scope, *dryRun, cfg, srcClient, dstClient)
 
 	useColor := !*noColor
 	term := report.NewTerminal(os.Stdout, useColor)
@@ -147,7 +143,7 @@ func main() {
 	}
 }
 
-func run(scope, singleProject string, dryRun bool, cfg *config.Config, src, dst *gitlab.Client) *internal.RunResult {
+func run(scope string, dryRun bool, cfg *config.Config, src, dst *gitlab.Client) *internal.RunResult {
 	runGroups := scope == "groups" || scope == "all"
 	runProjects := scope == "projects" || scope == "all"
 
@@ -178,20 +174,10 @@ func run(scope, singleProject string, dryRun bool, cfg *config.Config, src, dst 
 	if runProjects {
 		projCopier := copy.NewProjectCopier(src, dst, cfg.Domains.Projects, dryRun)
 
-		var projects []copy.ProjectEntry
-		var err error
-
-		if singleProject != "" {
-			projects = []copy.ProjectEntry{{
-				ProjectPath: singleProject,
-				GroupPath:   groupFromPath(singleProject),
-			}}
-		} else {
-			projects, err = copy.EnumerateProjects(cfg, src)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "error enumerating projects: %v\n", err)
-				os.Exit(1)
-			}
+		projects, err := copy.EnumerateProjects(cfg, src)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error enumerating projects: %v\n", err)
+			os.Exit(1)
 		}
 
 		if len(projects) == 0 {
@@ -334,13 +320,4 @@ func computeHasFailures(result *internal.RunResult) bool {
 		}
 	}
 	return false
-}
-
-func groupFromPath(path string) string {
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' {
-			return path[:i]
-		}
-	}
-	return ""
 }

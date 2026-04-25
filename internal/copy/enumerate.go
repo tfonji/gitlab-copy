@@ -67,24 +67,32 @@ func EnumerateProjects(cfg *config.Config, srcClient *gitlab.Client) ([]ProjectE
 	return entries, nil
 }
 
-func isExcluded(projectPath string, patterns []string) bool {
+// isExcluded returns true if path matches any of the exclusion patterns.
+// Pattern matching rules:
+//   - Exact match:        "my-group/subgroup"
+//   - Single-level glob: "my-group/sub*"  matches "my-group/subgroup" but not "my-group/sub/child"
+//   - Deep glob:         "my-group/*"     matches at any depth below my-group
+//     e.g. "my-group/a", "my-group/a/b", "my-group/a/b/c"
+func isExcluded(path string, patterns []string) bool {
 	for _, pattern := range patterns {
-
-		if pattern == projectPath {
+		// Exact match
+		if pattern == path {
 			return true
 		}
 
-		matched, err := filepath.Match(pattern, projectPath)
-		if err == nil && matched {
-			return true
-		}
-
-		parts := strings.Split(projectPath, "/")
-		if len(parts) > 0 {
-			matched, err = filepath.Match(pattern, parts[len(parts)-1])
-			if err == nil && matched {
+		// Deep glob: pattern ending in /* matches path at any depth below prefix
+		if strings.HasSuffix(pattern, "/*") {
+			prefix := strings.TrimSuffix(pattern, "/*")
+			if strings.HasPrefix(path, prefix+"/") {
 				return true
 			}
+			continue
+		}
+
+		// Standard filepath glob for single-level patterns
+		matched, err := filepath.Match(pattern, path)
+		if err == nil && matched {
+			return true
 		}
 	}
 	return false

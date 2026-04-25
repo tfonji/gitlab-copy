@@ -60,7 +60,6 @@ var DefaultGroupDomains = []string{
 	"protected_environments",
 	"approval_rules",
 	"jira_integration",
-	"compliance_frameworks",
 }
 
 var DefaultProjectDomains = []string{
@@ -79,6 +78,13 @@ var DefaultProjectDomains = []string{
 }
 
 func Load(path string) (*Config, error) {
+	return LoadWithOverrides(path, "", "")
+}
+
+// LoadWithOverrides loads config and applies CLI flag overrides before validation.
+// This allows -group and -project flags to satisfy the validation requirements
+// even when groups.include is empty in the config file.
+func LoadWithOverrides(path, groupOverride, projectOverride string) (*Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening config file: %w", err)
@@ -90,6 +96,14 @@ func Load(path string) (*Config, error) {
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
+	}
+
+	// Apply CLI overrides before defaults and validation
+	if groupOverride != "" {
+		cfg.Groups.Include = []string{groupOverride}
+	}
+	if projectOverride != "" {
+		cfg.Projects.Include = []string{projectOverride}
 	}
 
 	cfg.applyDefaults()
@@ -141,8 +155,11 @@ func (c *Config) validate() error {
 	if c.Destination.TokenEnv == "" {
 		return fmt.Errorf("destination.token_env is required")
 	}
-	if len(c.Groups.Include) == 0 {
-		return fmt.Errorf("at least one group must be specified under groups.include")
+	// groups.include is only required when we need to derive projects from groups.
+	// If projects.include has explicit paths, or a -group/-project flag will be
+	// passed at runtime, groups.include can be empty.
+	if len(c.Groups.Include) == 0 && len(c.Projects.Include) == 0 {
+		return fmt.Errorf("specify at least one of: groups.include or projects.include")
 	}
 	if os.Getenv(c.Source.TokenEnv) == "" {
 		return fmt.Errorf("environment variable %q (source token) is not set", c.Source.TokenEnv)

@@ -45,8 +45,6 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copyApprovalRules(groupPath)
 	case "jira_integration":
 		return c.copyJiraIntegration(groupPath)
-	case "compliance_frameworks":
-		return c.copyComplianceFrameworks(groupPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,

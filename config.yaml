@@ -33,7 +33,6 @@ domains:
     - protected_environments
     - approval_rules
     - jira_integration
-    - compliance_frameworks
   projects:
     - topics
     - environments
