@@ -60,6 +60,7 @@ var DefaultGroupDomains = []string{
 	"protected_environments",
 	"approval_rules",
 	"jira_integration",
+	"badges",
 }
 
 var DefaultProjectDomains = []string{

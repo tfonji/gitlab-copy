@@ -45,6 +45,8 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copyApprovalRules(groupPath)
 	case "jira_integration":
 		return c.copyJiraIntegration(groupPath)
+	case "badges":
+		return c.copyGroupBadges(groupPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -734,6 +736,100 @@ func (c *GroupCopier) copyComplianceFrameworks(groupPath string) internal.Domain
 				item.Error = fmt.Errorf("pipeline config path references source instance — verify %q is valid on dest", fw.PipelineConfigurationFullPath)
 			}
 			result.Items = append(result.Items, item)
+		}
+	}
+
+	return result
+}
+
+// --- badges ---
+
+func (c *GroupCopier) copyGroupBadges(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "badges"}
+
+	srcBadges, err := c.src.GetGroupBadges(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source badges: %w", err)
+		return result
+	}
+	dstBadges, err := c.dst.GetGroupBadges(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest badges: %w", err)
+		return result
+	}
+
+	badgeKey := func(b gitlab.Badge) string { return b.LinkURL + "|" + b.ImageURL }
+
+	srcByKey := make(map[string]gitlab.Badge, len(srcBadges))
+	for _, b := range srcBadges {
+		srcByKey[badgeKey(b)] = b
+	}
+	dstByKey := make(map[string]gitlab.Badge, len(dstBadges))
+	for _, b := range dstBadges {
+		dstByKey[badgeKey(b)] = b
+	}
+
+	// Delete dest badges not present on source
+	for key, dstBadge := range dstByKey {
+		if _, exists := srcByKey[key]; !exists {
+			if c.dryRun {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    dstBadge.Name,
+					Action: internal.ActionUpdated,
+					DryRun: true,
+					Error:  fmt.Errorf("extra badge on dest would be deleted"),
+				})
+				continue
+			}
+			if err := c.dst.DeleteGroupBadge(groupPath, dstBadge.ID); err != nil {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    dstBadge.Name,
+					Action: internal.ActionFailed,
+					Error:  fmt.Errorf("deleting extra badge: %w", err),
+				})
+			}
+		}
+	}
+
+	// Create source badges missing on dest
+	sort.Slice(srcBadges, func(i, j int) bool {
+		return srcBadges[i].Name < srcBadges[j].Name
+	})
+	for _, srcBadge := range srcBadges {
+		if _, exists := dstByKey[badgeKey(srcBadge)]; exists {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    srcBadge.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    srcBadge.Name,
+				Action: internal.ActionCreated,
+				DryRun: true,
+			})
+			continue
+		}
+
+		req := gitlab.BadgeRequest{
+			Name:     srcBadge.Name,
+			LinkURL:  srcBadge.LinkURL,
+			ImageURL: srcBadge.ImageURL,
+		}
+		if err := c.dst.CreateGroupBadge(groupPath, req); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    srcBadge.Name,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    srcBadge.Name,
+				Action: internal.ActionCreated,
+			})
 		}
 	}
 

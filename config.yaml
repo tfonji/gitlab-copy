@@ -51,6 +51,7 @@ domains:
     - protected_environments          # role-based deploy access per named environment
     - approval_rules                  # MR approval rule names and required counts (approvers need manual assignment)
     - jira_integration                # Jira integration config (credentials require manual verification on dest)
+    - badges                          # group-level badges (inherited by all projects in the group)
 
   projects:
     - topics                          # project tags/labels (AppID, CMDB ID, etc.)
@@ -82,3 +83,4 @@ output:
     - terminal                        # colored output during the run
     - html                            # tabbed HTML report with collapsible cards
     - json                            # machine-readable output for pipeline integration
+ 

@@ -188,6 +188,7 @@ For groups migrated in earlier batches, use `projects all` in step 2 and 3 to av
 | `protected_environments` | Which roles can deploy to named environments |
 | `approval_rules` | MR approval rule names and required counts (approvers need manual assignment) |
 | `jira_integration` | Jira integration config (credentials require manual verification) |
+| `badges` | Group-level badges inherited by all projects in the group |
 
 ### Project domains
 
