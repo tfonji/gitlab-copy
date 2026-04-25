@@ -14,7 +14,7 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
-	filename := fmt.Sprintf("gitlab-copy-%s.html")
+	filename := fmt.Sprintf("gitlab-copy.html")
 	path := filepath.Join(dir, filename)
 
 	f, err := os.Create(path)
