@@ -498,13 +498,15 @@ func (c *ProjectCopier) copyProjectPushRules(projectPath string) internal.Domain
 	}
 
 	action := internal.ActionCreated
+	var diffs []internal.DiffLine
 	if dstExists {
 		action = internal.ActionUpdated
+		diffs = pushRuleDiffs(src, dst)
 	}
 
 	if c.dryRun {
 		result.Items = []internal.ItemResult{
-			{Key: "project_push_rules", Action: action, DryRun: true},
+			{Key: "project_push_rules", Action: action, DryRun: true, Diffs: diffs},
 		}
 		return result
 	}
@@ -523,7 +525,7 @@ func (c *ProjectCopier) copyProjectPushRules(projectPath string) internal.Domain
 		return result
 	}
 	result.Items = []internal.ItemResult{
-		{Key: "project_push_rules", Action: action},
+		{Key: "project_push_rules", Action: action, Diffs: diffs},
 	}
 	return result
 }
@@ -551,16 +553,8 @@ func (c *ProjectCopier) copyProjectMRApprovals(projectPath string) internal.Doma
 		return result
 	}
 
-	matches := dst != nil &&
-		src.ApprovalsBeforeMerge == dst.ApprovalsBeforeMerge &&
-		src.ResetApprovalsOnPush == dst.ResetApprovalsOnPush &&
-		src.SelectiveCodeOwnerRemovals == dst.SelectiveCodeOwnerRemovals &&
-		src.DisableOverridingApproversPerMergeRequest == dst.DisableOverridingApproversPerMergeRequest &&
-		src.MergeRequestsAuthorApproval == dst.MergeRequestsAuthorApproval &&
-		src.MergeRequestsDisableCommittersApproval == dst.MergeRequestsDisableCommittersApproval &&
-		src.RequirePasswordToApprove == dst.RequirePasswordToApprove
-
-	if matches {
+	diffs := projectMRApprovalsDiffs(src, dst)
+	if len(diffs) == 0 {
 		result.Items = []internal.ItemResult{
 			{Key: "project_mr_approvals", Action: internal.ActionSkipped, DryRun: c.dryRun},
 		}
@@ -569,7 +563,7 @@ func (c *ProjectCopier) copyProjectMRApprovals(projectPath string) internal.Doma
 
 	if c.dryRun {
 		result.Items = []internal.ItemResult{
-			{Key: "project_mr_approvals", Action: internal.ActionUpdated, DryRun: true},
+			{Key: "project_mr_approvals", Action: internal.ActionUpdated, DryRun: true, Diffs: diffs},
 		}
 		return result
 	}
@@ -581,7 +575,7 @@ func (c *ProjectCopier) copyProjectMRApprovals(projectPath string) internal.Doma
 		return result
 	}
 	result.Items = []internal.ItemResult{
-		{Key: "project_mr_approvals", Action: internal.ActionUpdated},
+		{Key: "project_mr_approvals", Action: internal.ActionUpdated, Diffs: diffs},
 	}
 	return result
 }
@@ -831,8 +825,10 @@ func (c *ProjectCopier) copyProtectedBranches(projectPath string) internal.Domai
 		}
 
 		action := internal.ActionCreated
+		var diffs []internal.DiffLine
 		if exists {
 			action = internal.ActionUpdated
+			diffs = protectedBranchDiffs(src, dst)
 		}
 
 		if c.dryRun {
@@ -840,6 +836,7 @@ func (c *ProjectCopier) copyProtectedBranches(projectPath string) internal.Domai
 				Key:    src.Name,
 				Action: action,
 				DryRun: true,
+				Diffs:  diffs,
 			})
 			continue
 		}
@@ -863,7 +860,7 @@ func (c *ProjectCopier) copyProtectedBranches(projectPath string) internal.Domai
 				Error:  err,
 			})
 		} else {
-			item := internal.ItemResult{Key: src.Name, Action: action}
+			item := internal.ItemResult{Key: src.Name, Action: action, Diffs: diffs}
 			if hasUserGroupAccessLevels(src) {
 				item.Error = fmt.Errorf("user/group-specific access levels not copied — role-based levels only")
 			}
@@ -913,8 +910,10 @@ func (c *ProjectCopier) copyProtectedTags(projectPath string) internal.DomainCop
 		}
 
 		action := internal.ActionCreated
+		var diffs []internal.DiffLine
 		if exists {
 			action = internal.ActionUpdated
+			diffs = protectedTagDiffs(src, dst)
 		}
 
 		if c.dryRun {
@@ -922,6 +921,7 @@ func (c *ProjectCopier) copyProtectedTags(projectPath string) internal.DomainCop
 				Key:    src.Name,
 				Action: action,
 				DryRun: true,
+				Diffs:  diffs,
 			})
 			continue
 		}
@@ -944,7 +944,7 @@ func (c *ProjectCopier) copyProtectedTags(projectPath string) internal.DomainCop
 				Error:  err,
 			})
 		} else {
-			item := internal.ItemResult{Key: src.Name, Action: action}
+			item := internal.ItemResult{Key: src.Name, Action: action, Diffs: diffs}
 			if hasUserGroupTagAccessLevels(src) {
 				item.Error = fmt.Errorf("user/group-specific access levels not copied — role-based levels only")
 			}

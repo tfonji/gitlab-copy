@@ -10,13 +10,21 @@ const (
 	ActionFailed  CopyAction = "failed"
 )
 
+// DiffLine shows a single field that differs between source and dest.
+type DiffLine struct {
+	Field string
+	Src   string
+	Dst   string
+}
+
 // ItemResult is one item within a domain — either a singleton (push_rules,
 // topics) or one entry in a collection (a named protected environment, etc).
 type ItemResult struct {
 	Key    string
 	Action CopyAction
-	DryRun bool  // if true, Action is what WOULD have happened — no write was made
-	Error  error // only set when Action == ActionFailed
+	DryRun bool       // if true, Action is what WOULD have happened — no write was made
+	Error  error      // only set when Action == ActionFailed or as a warning
+	Diffs  []DiffLine // populated for Updated items to show what changed
 }
 
 // Label returns the display string for the item's action, incorporating

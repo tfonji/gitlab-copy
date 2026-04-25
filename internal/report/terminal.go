@@ -129,6 +129,14 @@ func (t *Terminal) writeItem(indent string, item internal.ItemResult) {
 		t.writef("%s%s%s%s %s — %s\n",
 			indent, color, symbol, colorReset, item.Key, label)
 	}
+	// Render diff lines indented under the item
+	for _, diff := range item.Diffs {
+		t.writef("%s  %s%s%s: %s%s%s → %s%s%s\n",
+			indent,
+			colorDim, diff.Field, colorReset,
+			colorRed, diff.Dst, colorReset,
+			colorGreen, diff.Src, colorReset)
+	}
 }
 
 func itemSymbolColor(item internal.ItemResult) (symbol, color string) {

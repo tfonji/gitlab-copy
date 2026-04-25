@@ -86,6 +86,12 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
   .item-warn { color: #e67e22; font-size: 12px; margin-left: 4px; }
   .item-err  { color: #c0392b; font-size: 12px; margin-left: 4px; }
   .all-skipped { color: #aaa; font-size: 12px; font-style: italic; }
+  .diff-list { margin: 2px 0 4px 0; padding-left: 8px; border-left: 2px solid #f0c040; }
+  .diff-row { display: flex; gap: 6px; align-items: baseline; font-size: 12px; padding: 1px 0; font-family: monospace; }
+  .diff-field { color: #888; min-width: 180px; flex-shrink: 0; }
+  .diff-dst { color: #c0392b; text-decoration: line-through; }
+  .diff-arrow { color: #bbb; }
+  .diff-src { color: #1e8449; }
   .toggle-all { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; color: #555; margin-bottom: 16px; }
   .toggle-all:hover { background: #f5f5f5; }
   .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 0; }
@@ -321,6 +327,14 @@ func writeDomainRowHTML(f *os.File, d internal.DomainCopyResult) {
 		}
 		fmt.Fprintf(f, `<div class="item-row"><span class="item-label %s">%s</span><span class="item-key">%s</span>%s</div>`,
 			labelClass, labelText, htmlEsc(item.Key), extra)
+		if len(item.Diffs) > 0 {
+			fmt.Fprintf(f, `<div class="diff-list">`)
+			for _, d := range item.Diffs {
+				fmt.Fprintf(f, `<div class="diff-row"><span class="diff-field">%s</span><span class="diff-dst">%s</span><span class="diff-arrow">→</span><span class="diff-src">%s</span></div>`,
+					htmlEsc(d.Field), htmlEsc(d.Dst), htmlEsc(d.Src))
+			}
+			fmt.Fprintf(f, `</div>`)
+		}
 	}
 	fmt.Fprintf(f, `</div>`)
 	fmt.Fprintf(f, `</div></div>`)

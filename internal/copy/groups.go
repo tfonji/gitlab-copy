@@ -95,15 +95,17 @@ func (c *GroupCopier) copyPushRules(groupPath string) internal.DomainCopyResult 
 		return result
 	}
 
+	var diffs []internal.DiffLine
 	if dstExists {
 		action = internal.ActionUpdated
+		diffs = pushRuleDiffs(src, dst)
 	} else {
 		action = internal.ActionCreated
 	}
 
 	if c.dryRun {
 		result.Items = []internal.ItemResult{
-			{Key: "push_rules", Action: action, DryRun: true},
+			{Key: "push_rules", Action: action, DryRun: true, Diffs: diffs},
 		}
 		return result
 	}
@@ -122,7 +124,7 @@ func (c *GroupCopier) copyPushRules(groupPath string) internal.DomainCopyResult 
 	}
 
 	result.Items = []internal.ItemResult{
-		{Key: "push_rules", Action: action},
+		{Key: "push_rules", Action: action, Diffs: diffs},
 	}
 	return result
 }
@@ -157,9 +159,11 @@ func (c *GroupCopier) copyDefaultBranchName(groupPath string) internal.DomainCop
 		return result
 	}
 
+	diffs := []internal.DiffLine{{Field: "default_branch_name", Src: dst.DefaultBranchName, Dst: src.DefaultBranchName}}
+
 	if c.dryRun {
 		result.Items = []internal.ItemResult{
-			{Key: "default_branch_name", Action: internal.ActionUpdated, DryRun: true},
+			{Key: "default_branch_name", Action: internal.ActionUpdated, DryRun: true, Diffs: diffs},
 		}
 		return result
 	}
@@ -174,7 +178,7 @@ func (c *GroupCopier) copyDefaultBranchName(groupPath string) internal.DomainCop
 	}
 
 	result.Items = []internal.ItemResult{
-		{Key: "default_branch_name", Action: internal.ActionUpdated},
+		{Key: "default_branch_name", Action: internal.ActionUpdated, Diffs: diffs},
 	}
 	return result
 }
@@ -195,12 +199,8 @@ func (c *GroupCopier) copyMRSettings(groupPath string) internal.DomainCopyResult
 		return result
 	}
 
-	// Compare all MR setting fields
-	matches := src.OnlyAllowMergeIfPipelineSucceeds == dst.OnlyAllowMergeIfPipelineSucceeds &&
-		src.OnlyAllowMergeIfAllDiscussionsAreResolved == dst.OnlyAllowMergeIfAllDiscussionsAreResolved &&
-		ptrBoolEqual(src.PreventMergeWithoutJiraIssue, dst.PreventMergeWithoutJiraIssue)
-
-	if matches {
+	diffs := mrSettingsDiffs(src, dst)
+	if len(diffs) == 0 {
 		result.Items = []internal.ItemResult{
 			{Key: "mr_settings", Action: internal.ActionSkipped, DryRun: c.dryRun},
 		}
@@ -209,7 +209,7 @@ func (c *GroupCopier) copyMRSettings(groupPath string) internal.DomainCopyResult
 
 	if c.dryRun {
 		result.Items = []internal.ItemResult{
-			{Key: "mr_settings", Action: internal.ActionUpdated, DryRun: true},
+			{Key: "mr_settings", Action: internal.ActionUpdated, DryRun: true, Diffs: diffs},
 		}
 		return result
 	}
@@ -226,7 +226,7 @@ func (c *GroupCopier) copyMRSettings(groupPath string) internal.DomainCopyResult
 	}
 
 	result.Items = []internal.ItemResult{
-		{Key: "mr_settings", Action: internal.ActionUpdated},
+		{Key: "mr_settings", Action: internal.ActionUpdated, Diffs: diffs},
 	}
 	return result
 }
@@ -316,15 +316,8 @@ func (c *GroupCopier) copyMRApprovalSettings(groupPath string) internal.DomainCo
 		return result
 	}
 
-	matches := dst != nil &&
-		src.AllowAuthorApproval.Value == dst.AllowAuthorApproval.Value &&
-		src.AllowCommitterApproval.Value == dst.AllowCommitterApproval.Value &&
-		src.AllowOverridesToApproverList.Value == dst.AllowOverridesToApproverList.Value &&
-		src.RequirePasswordToApprove.Value == dst.RequirePasswordToApprove.Value &&
-		src.RetainApprovalsOnPush.Value == dst.RetainApprovalsOnPush.Value &&
-		src.SelectiveCodeOwnerRemovals.Value == dst.SelectiveCodeOwnerRemovals.Value
-
-	if matches {
+	diffs := mrApprovalSettingsDiffs(src, dst)
+	if len(diffs) == 0 {
 		result.Items = []internal.ItemResult{
 			{Key: "mr_approval_settings", Action: internal.ActionSkipped, DryRun: c.dryRun},
 		}
@@ -333,7 +326,7 @@ func (c *GroupCopier) copyMRApprovalSettings(groupPath string) internal.DomainCo
 
 	if c.dryRun {
 		result.Items = []internal.ItemResult{
-			{Key: "mr_approval_settings", Action: internal.ActionUpdated, DryRun: true},
+			{Key: "mr_approval_settings", Action: internal.ActionUpdated, DryRun: true, Diffs: diffs},
 		}
 		return result
 	}
@@ -354,7 +347,7 @@ func (c *GroupCopier) copyMRApprovalSettings(groupPath string) internal.DomainCo
 	}
 
 	result.Items = []internal.ItemResult{
-		{Key: "mr_approval_settings", Action: internal.ActionUpdated},
+		{Key: "mr_approval_settings", Action: internal.ActionUpdated, Diffs: diffs},
 	}
 	return result
 }
