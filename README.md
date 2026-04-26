@@ -276,12 +276,22 @@ projects:
 **Run only group-level domains (no projects):**
 
 ```bash
+# Group already in config:
+./gitlab-copy groups all -config config.yaml
+
+# Or override the group at runtime:
 ./gitlab-copy groups all -config config.yaml -group group1
 ```
+
+With `include_subgroups: true` in config, this runs group domains for the top-level group **and all subgroups** — you only need to specify the top-level group path.
 
 **Run only project-level domains (no group settings):**
 
 ```bash
+# Group already in config:
+./gitlab-copy projects all -config config.yaml
+
+# Or override the group at runtime:
 ./gitlab-copy projects all -config config.yaml -group group1
 ```
 
@@ -308,7 +318,7 @@ projects:
 | Flag | Description |
 |---|---|
 | `-config <path>` | Path to config file (default: `config.yaml`) |
-| `-group <path>` | Target a single group, overrides `groups.include` in config |
+| `-group <path>` | Sets the target group, overrides `groups.include` in config. With `include_subgroups: true`, all subgroups under this group are included automatically |
 | `-project <path>` | Target a single project path, no group config required |
 | `-dry-run` | Preview mode — no writes made, shows what would change |
 | `-no-color` | Disable ANSI color in terminal output (useful in CI) |
@@ -324,9 +334,19 @@ projects:
 
 ### All commands
 
+> **Note on `-group` and `-project` flags:** These are optional overrides. If your config already has `groups.include` set, you don't need `-group` — just run with `-config`. Use `-group` when you want to target a different group than what's in the config without editing the file, or when your config has no group listed.
+>
+> **Subgroups and `-group`:** When you pass `-group group1`, it sets `group1` as the target group. With `include_subgroups: true` in config, all subgroups under `group1` (e.g. `group1/dast`, `group1/operations`, and any deeper descendants) are enumerated and processed automatically. You do not need to list subgroups separately.
+
+---
+
 #### Dry-run (preview) — always run this first
 
 ```bash
+# If groups.include is set in config:
+./gitlab-copy all -config config.yaml -dry-run
+
+# Or override the group at runtime:
 ./gitlab-copy all -config config.yaml -group my-group -dry-run
 ```
 
@@ -337,30 +357,30 @@ Reads source and dest, shows exactly what would be created/updated/skipped — n
 #### Copy everything for a new group
 
 ```bash
-./gitlab-copy all -config config.yaml -group my-group
+./gitlab-copy all -config config.yaml
 ```
 
-Runs all group domains followed by all project domains for every project under `my-group`. Use this on **Batch 1** when the group has never been migrated to dest.
+Runs all group domains followed by all project domains for every project under the groups listed in `groups.include`. Use this on **Batch 1** when the group has never been migrated to dest.
 
 ---
 
 #### Copy projects only (group already set up)
 
 ```bash
-./gitlab-copy projects all -config config.yaml -group my-group
+./gitlab-copy projects all -config config.yaml
 ```
 
-Skips all group-level domains entirely. Runs only project domains for every project under `my-group`. Use this on **Batch 2+** when the group was already configured in a previous batch.
+Skips all group-level domains entirely. Runs only project domains for every project under the configured groups. Use this on **Batch 2+** when the group was already configured in a previous batch.
 
 ---
 
 #### Copy group settings only (no projects)
 
 ```bash
-./gitlab-copy groups all -config config.yaml -group my-group
+./gitlab-copy groups all -config config.yaml
 ```
 
-Runs group domains only — push rules, MR settings, approval settings, etc. No project domains run at all. Use this when you need to re-apply or fix group-level settings without touching projects.
+Runs group domains only — push rules, MR settings, approval settings, etc. No project domains run at all. If `include_subgroups: true` is set in config, group domains are applied to the top-level group **and all subgroups** recursively. Use this when you need to re-apply or fix group-level settings without touching projects.
 
 ---
 
@@ -370,7 +390,7 @@ Runs group domains only — push rules, MR settings, approval settings, etc. No 
 ./gitlab-copy projects all -config config.yaml -project my-group/my-project
 ```
 
-Targets one specific project. No `-group` flag needed, no `groups.include` required in config. Useful for:
+Targets one specific project. The `-project` flag overrides `projects.include` in the config — no `groups.include` required. Useful for:
 - Re-running a specific project after an error
 - Migrating a project that was missed in a previous batch
 - Testing settings on one project before running the full batch
@@ -387,20 +407,20 @@ Preview what would change for one project only. Good for investigating a specifi
 
 ---
 
-#### Copy everything using config file only (no CLI group override)
+#### Override the group at runtime
 
 ```bash
-./gitlab-copy all -config my-batch-config.yaml
+./gitlab-copy all -config config.yaml -group some-other-group
 ```
 
-Uses whatever `groups.include` is set in the config file. Useful when you have a batch-specific config that already lists the groups to process and you want to run it without any CLI overrides.
+Overrides `groups.include` in config with the specified group. With `include_subgroups: true` in config, all subgroups under the specified group are included automatically — you only need to pass the top-level group path. Useful when you have a shared base config and want to target different groups without maintaining separate config files per group.
 
 ---
 
 #### Run with no terminal color (for CI pipelines)
 
 ```bash
-./gitlab-copy all -config config.yaml -group my-group -no-color
+./gitlab-copy all -config config.yaml -no-color
 ```
 
 Disables ANSI color codes. Use in CI environments where colored output produces garbled logs.
@@ -410,7 +430,7 @@ Disables ANSI color codes. Use in CI environments where colored output produces 
 #### Dry-run with no color (CI preview step)
 
 ```bash
-./gitlab-copy all -config config.yaml -group my-group -dry-run -no-color
+./gitlab-copy all -config config.yaml -dry-run -no-color
 ```
 
 Preview mode for CI. Combine with artifact archiving of the JSON report for audit trails.
@@ -423,7 +443,7 @@ If a previous run had failures, fix the root cause and re-run the same command. 
 
 ```bash
 # Same command as before — safe to re-run
-./gitlab-copy projects all -config config.yaml -group my-group
+./gitlab-copy projects all -config config.yaml
 ```
 
 ---
@@ -442,7 +462,7 @@ domains:
 ```
 
 ```bash
-./gitlab-copy projects all -config batch-3-push-rules-only.yaml -group my-group
+./gitlab-copy projects all -config batch-3-push-rules-only.yaml
 ```
 
 **Exclude specific subgroups:**
@@ -456,7 +476,7 @@ groups:
 ```
 
 ```bash
-./gitlab-copy all -config config.yaml -group my-group
+./gitlab-copy all -config config.yaml
 ```
 
 Projects under `dast` and `dast_rest_scan` will be enumerated but skipped due to the exclusion rules.
