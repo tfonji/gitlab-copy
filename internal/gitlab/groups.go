@@ -84,7 +84,6 @@ func (c *Client) ListSubgroups(groupPath string) ([]GroupListItem, error) {
 		params := url.Values{}
 		params.Set("per_page", "100")
 		params.Set("page", fmt.Sprintf("%d", page))
-		params.Set("all_available", "false")
 
 		var batch []GroupListItem
 		err := c.get("/groups/"+encodePath(groupPath)+"/descendant_groups", params, &batch)
