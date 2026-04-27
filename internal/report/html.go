@@ -156,15 +156,17 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
 
 	fmt.Fprintf(f, `<div class="container">`)
 
-	// --- Stats section ---
-	writeStats(f, result, created, updated, skipped, failed, groupCount, projectCount)
-
-	// Summary table
+	// Compute counts needed for stats and summary table
 	groupCount := len(result.Groups)
 	projectCount := 0
 	for _, gpg := range result.ProjectGroups {
 		projectCount += len(gpg.Projects)
 	}
+
+	// --- Stats section ---
+	writeStats(f, result, created, updated, skipped, failed, groupCount, projectCount)
+
+	// Summary table
 
 	fmt.Fprintf(f, `<div class="summary-table"><table>
 <thead><tr><th>Scope</th><th>Created</th><th>Updated</th><th>Skipped</th><th>Failed</th></tr></thead><tbody>`)
