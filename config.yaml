@@ -59,6 +59,7 @@ domains:
     - badges                          # group-level badges (inherited by all projects in the group)
     - compliance_frameworks           # compliance framework definitions (name, description, color, pipeline config)
     - compliance_assignments          # which projects have which frameworks assigned (run after compliance_frameworks)
+    - security_policy_project         # links the security policy project to the group — requires the policy project to exist on dest first
 
   projects:
     - topics                          # project tags/labels (AppID, CMDB ID, etc.)

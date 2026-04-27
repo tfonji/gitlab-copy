@@ -64,6 +64,7 @@ var DefaultGroupDomains = []string{
 	"badges",
 	"compliance_frameworks",
 	"compliance_assignments",
+	"security_policy_project",
 }
 
 var DefaultProjectDomains = []string{

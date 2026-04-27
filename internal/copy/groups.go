@@ -53,6 +53,8 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copyComplianceFrameworks(groupPath)
 	case "compliance_assignments":
 		return c.copyComplianceAssignments(groupPath)
+	case "security_policy_project":
+		return c.copySecurityPolicyProject(groupPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -981,6 +983,72 @@ func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.Domai
 		}
 	}
 
+	return result
+}
+
+// --- security_policy_project ---
+
+// copySecurityPolicyProject links the same security policy project on dest
+// that is linked on source. The security policy project itself must already
+// exist on dest (migrated by Congregate) with the same full path.
+func (c *GroupCopier) copySecurityPolicyProject(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "security_policy_project"}
+
+	src, err := c.src.GetGroupSecurityPolicyProject(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source security policy project: %w", err)
+		return result
+	}
+	if src == nil {
+		result.Items = []internal.ItemResult{
+			{Key: "security_policy_project", Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	dst, err := c.dst.GetGroupSecurityPolicyProject(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest security policy project: %w", err)
+		return result
+	}
+
+	// Already linked to the same project
+	if dst != nil && dst.FullPath == src.FullPath {
+		result.Items = []internal.ItemResult{
+			{Key: src.FullPath, Action: internal.ActionSkipped, DryRun: c.dryRun},
+		}
+		return result
+	}
+
+	if c.dryRun {
+		action := internal.ActionCreated
+		if dst != nil {
+			action = internal.ActionUpdated
+		}
+		result.Items = []internal.ItemResult{
+			{Key: src.FullPath, Action: action, DryRun: true},
+		}
+		return result
+	}
+
+	if err := c.dst.LinkSecurityPolicyProject(groupPath, src.FullPath); err != nil {
+		result.Items = []internal.ItemResult{
+			{Key: src.FullPath, Action: internal.ActionFailed, Error: err},
+		}
+		return result
+	}
+
+	action := internal.ActionCreated
+	if dst != nil {
+		action = internal.ActionUpdated
+	}
+	result.Items = []internal.ItemResult{
+		{
+			Key:    src.FullPath,
+			Action: action,
+			Error:  fmt.Errorf("verify the security policy project exists on dest before running"),
+		},
+	}
 	return result
 }
 

@@ -114,10 +114,10 @@ The group has never been migrated. Run `all` to copy both group-level settings a
 
 ```bash
 # Dry-run
-./gitlab-copy all -config config.yaml -group group1 -dry-run
+./gitlab-copy all -config config.yaml -group fxpayments -dry-run
 
 # Apply
-./gitlab-copy all -config config.yaml -group group1
+./gitlab-copy all -config config.yaml -group fxpayments
 ```
 
 ### Batch 2+ — Existing group (additional APPID batches)
@@ -126,10 +126,10 @@ The group already exists on dest with correct settings from Batch 1. Only copy p
 
 ```bash
 # Dry-run
-./gitlab-copy projects all -config config.yaml -group group1 -dry-run
+./gitlab-copy projects all -config config.yaml -group fxpayments -dry-run
 
 # Apply
-./gitlab-copy projects all -config config.yaml -group group1
+./gitlab-copy projects all -config config.yaml -group fxpayments
 ```
 
 ### Single project
@@ -137,8 +137,8 @@ The group already exists on dest with correct settings from Batch 1. Only copy p
 Useful for re-running a specific project after a fix, or for one-off migrations:
 
 ```bash
-./gitlab-copy projects all -config config.yaml -project group1/fx-posting-soap -dry-run
-./gitlab-copy projects all -config config.yaml -project group1/fx-posting-soap
+./gitlab-copy projects all -config config.yaml -project fxpayments/fx-posting-soap -dry-run
+./gitlab-copy projects all -config config.yaml -project fxpayments/fx-posting-soap
 ```
 
 No group needs to be specified in the config for single-project runs.
@@ -160,16 +160,16 @@ destination:
 
 groups:
   include:
-    - group1                      # group path(s) to process
+    - fxpayments                      # group path(s) to process
   exclude:
-    - group1/dast/*               # exclude all descendants of group1/dast
-    - group1/dast_rest_scan/*
+    - fxpayments/dast/*               # exclude all descendants of fxpayments/dast
+    - fxpayments/dast_rest_scan/*
   include_subgroups: true
 
 projects:
   include: []                         # leave empty to derive from groups above
   exclude:
-    - group1/OBSOLETE-*           # exclude by name pattern
+    - fxpayments/OBSOLETE-*           # exclude by name pattern
   include_subgroups: true
   include_archived: false
 
@@ -245,32 +245,32 @@ Control scope through a combination of config and CLI flags.
 ```yaml
 groups:
   exclude:
-    - group1/dast/*              # skip all dast projects
-    - group1/dast_rest_scan/*    # skip all dast_rest_scan projects
+    - fxpayments/dast/*              # skip all dast projects
+    - fxpayments/dast_rest_scan/*    # skip all dast_rest_scan projects
 
 projects:
   exclude:
-    - group1/OBSOLETE-*          # skip projects prefixed with OBSOLETE-
+    - fxpayments/OBSOLETE-*          # skip projects prefixed with OBSOLETE-
 ```
 
 **Exclusion pattern syntax:**
 
 | Pattern | What it matches |
 |---|---|
-| `group1/dast` | Exact path only |
-| `group1/dast_*` | Single-level glob — direct children matching the pattern |
-| `group1/dast/*` | Deep glob — all descendants at any depth below `group1/dast` |
+| `fxpayments/dast` | Exact path only |
+| `fxpayments/dast_*` | Single-level glob — direct children matching the pattern |
+| `fxpayments/dast/*` | Deep glob — all descendants at any depth below `fxpayments/dast` |
 
 **Target a specific group at runtime (overrides config):**
 
 ```bash
-./gitlab-copy all -config config.yaml -group group1
+./gitlab-copy all -config config.yaml -group fxpayments
 ```
 
 **Target a single project at runtime:**
 
 ```bash
-./gitlab-copy projects all -config config.yaml -project group1/fx-posting-soap
+./gitlab-copy projects all -config config.yaml -project fxpayments/fx-posting-soap
 ```
 
 **Run only group-level domains (no projects):**
@@ -280,7 +280,7 @@ projects:
 ./gitlab-copy groups all -config config.yaml
 
 # Or override the group at runtime:
-./gitlab-copy groups all -config config.yaml -group group1
+./gitlab-copy groups all -config config.yaml -group fxpayments
 ```
 
 With `include_subgroups: true` in config, this runs group domains for the top-level group **and all subgroups** — you only need to specify the top-level group path.
@@ -292,7 +292,7 @@ With `include_subgroups: true` in config, this runs group domains for the top-le
 ./gitlab-copy projects all -config config.yaml
 
 # Or override the group at runtime:
-./gitlab-copy projects all -config config.yaml -group group1
+./gitlab-copy projects all -config config.yaml -group fxpayments
 ```
 
 ---
@@ -336,7 +336,7 @@ With `include_subgroups: true` in config, this runs group domains for the top-le
 
 > **Note on `-group` and `-project` flags:** These are optional overrides. If your config already has `groups.include` set, you don't need `-group` — just run with `-config`. Use `-group` when you want to target a different group than what's in the config without editing the file, or when your config has no group listed.
 >
-> **Subgroups and `-group`:** When you pass `-group group1`, it sets `group1` as the target group. With `include_subgroups: true` in config, all subgroups under `group1` (e.g. `group1/dast`, `group1/operations`, and any deeper descendants) are enumerated and processed automatically. You do not need to list subgroups separately.
+> **Subgroups and `-group`:** When you pass `-group fxpayments`, it sets `fxpayments` as the target group. With `include_subgroups: true` in config, all subgroups under `fxpayments` (e.g. `fxpayments/dast`, `fxpayments/operations`, and any deeper descendants) are enumerated and processed automatically. You do not need to list subgroups separately.
 
 ---
 
@@ -543,6 +543,7 @@ Red shows the current dest value. Green shows the source value that will be appl
 | `badges` | Group-level badges inherited by all projects in the group | Badge URLs may reference source instance — verify after copy |
 | `compliance_frameworks` | Compliance framework definitions (name, description, color, pipeline config path) | Pipeline config path must exist on dest |
 | `compliance_assignments` | Which projects have which compliance frameworks assigned | Must run after `compliance_frameworks` |
+| `security_policy_project` | Links the security policy project to the group | The policy project must already exist on dest (migrated by Congregate) with the same full path |
 
 ### Project domains
 
@@ -569,7 +570,6 @@ These items cannot be copied by the tool. They require manual action on the dest
 
 | Item | Why | Action required |
 |---|---|---|
-| **Security policies** | No API exists for linking a security policy project | Configure via GitLab UI → Group → Security → Policies |
 | **Group/project access tokens** | Token value is only shown once at creation — cannot be read back | Create new tokens on dest with the same name and scopes |
 | **Deploy tokens** | Token secret cannot be exported | Regenerate on dest and update any services using them |
 | **Masked/hidden variables** | Values are masked in API responses — reads return empty | Create variables manually on dest with the correct values |
