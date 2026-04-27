@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"gitlab-copy/internal"
 )
@@ -14,9 +13,7 @@ func WriteJSON(result *internal.RunResult, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
-	timestamp := time.Now().Format("20060102-150405")
-	filename := fmt.Sprintf("gitlab-copy-%s.json", timestamp)
-	path := filepath.Join(dir, filename)
+	path := filepath.Join(dir, "gitlab-copy.json")
 
 	// Serialize errors as strings for JSON output
 	type jsonDiff struct {
