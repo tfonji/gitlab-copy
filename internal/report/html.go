@@ -14,7 +14,8 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
-	filename := fmt.Sprintf("gitlab-copy.html")
+	timestamp := time.Now().Format("20060102-150405")
+	filename := fmt.Sprintf("gitlab-copy-%s.html", timestamp)
 	path := filepath.Join(dir, filename)
 
 	f, err := os.Create(path)
@@ -108,6 +109,32 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
   .project-body { padding: 0 20px 16px; display: none; }
   .project-body.open { display: block; }
   .dry-run-banner { background: #eaf4ff; border: 1px solid #b3d4ff; border-radius: 6px; padding: 8px 14px; color: #1a73e8; font-size: 13px; margin-bottom: 16px; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .stats-card { background: white; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.08); padding: 16px 20px; }
+  .stats-card h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #888; margin-bottom: 12px; }
+  .stats-numbers { display: flex; gap: 24px; }
+  .stats-num { text-align: center; }
+  .stats-num .val { font-size: 28px; font-weight: 700; line-height: 1; }
+  .stats-num .lbl { font-size: 11px; color: #888; margin-top: 3px; }
+  .stats-num.created .val { color: #1e8449; }
+  .stats-num.updated .val { color: #e67e22; }
+  .stats-num.skipped .val { color: #999; }
+  .stats-num.failed .val  { color: #c0392b; }
+  .stats-num.neutral .val { color: #333; }
+  .stats-num.good .val    { color: #1e8449; }
+  .stats-num.warn .val    { color: #e67e22; }
+  .stats-num.bad .val     { color: #c0392b; }
+  .domain-stats-table { width: 100%%; border-collapse: collapse; font-size: 12px; }
+  .domain-stats-table th { text-align: right; padding: 4px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #888; border-bottom: 1px solid #eee; }
+  .domain-stats-table th:first-child { text-align: left; }
+  .domain-stats-table td { padding: 5px 10px; text-align: right; border-bottom: 1px solid #f5f5f5; font-family: monospace; }
+  .domain-stats-table td:first-child { text-align: left; font-family: monospace; color: #555; }
+  .domain-stats-table tr:last-child td { border-bottom: none; }
+  .domain-stats-table tr:hover td { background: #fafafa; }
+  .dst-created { color: #1e8449; }
+  .dst-updated { color: #e67e22; }
+  .dst-failed  { color: #c0392b; font-weight: 600; }
+  .dst-zero    { color: #ddd; }
 </style>
 </head>
 <body>
@@ -128,6 +155,9 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
 	}
 
 	fmt.Fprintf(f, `<div class="container">`)
+
+	// --- Stats section ---
+	writeStats(f, result, created, updated, skipped, failed, groupCount, projectCount)
 
 	// Summary table
 	groupCount := len(result.Groups)
@@ -402,4 +432,118 @@ func htmlEsc(s string) string {
 	s = strings.ReplaceAll(s, ">", "&gt;")
 	s = strings.ReplaceAll(s, `"`, "&quot;")
 	return s
+}
+
+type domainStat struct {
+	name    string
+	created int
+	updated int
+	skipped int
+	failed  int
+}
+
+func writeStats(f *os.File, result *internal.RunResult, created, updated, skipped, failed, groupCount, projectCount int) {
+	// --- Domain breakdown ---
+	domainMap := make(map[string]*domainStat)
+	domainOrder := []string{}
+
+	addDomainItems := func(domainName string, items []internal.ItemResult) {
+		ds, ok := domainMap[domainName]
+		if !ok {
+			ds = &domainStat{name: domainName}
+			domainMap[domainName] = ds
+			domainOrder = append(domainOrder, domainName)
+		}
+		for _, item := range items {
+			switch item.Action {
+			case internal.ActionCreated:
+				ds.created++
+			case internal.ActionUpdated:
+				ds.updated++
+			case internal.ActionSkipped:
+				ds.skipped++
+			case internal.ActionFailed:
+				ds.failed++
+			}
+		}
+	}
+
+	for _, gr := range result.Groups {
+		for _, d := range gr.Domains {
+			addDomainItems(d.Domain, d.Items)
+		}
+	}
+	for _, gpg := range result.ProjectGroups {
+		for _, pr := range gpg.Projects {
+			for _, d := range pr.Domains {
+				addDomainItems(d.Domain, d.Items)
+			}
+		}
+	}
+
+	// --- Project health ---
+	inSync, hadChanges, hadFailures := 0, 0, 0
+	for _, gpg := range result.ProjectGroups {
+		for _, pr := range gpg.Projects {
+			c, u, _, fa := 0, 0, 0, 0
+			for _, d := range pr.Domains {
+				dc, du, _, df := d.Counts()
+				c += dc
+				u += du
+				fa += df
+			}
+			if fa > 0 {
+				hadFailures++
+			} else if c+u > 0 {
+				hadChanges++
+			} else {
+				inSync++
+			}
+		}
+	}
+
+	// --- Count domains that actually ran (had any items) ---
+	domainsRun := len(domainOrder)
+
+	fmt.Fprintf(f, `<div class="stats-grid">`)
+
+	// Panel 1 — Run summary
+	fmt.Fprintf(f, `<div class="stats-card"><h3>Run Summary</h3><div class="stats-numbers">`)
+	fmt.Fprintf(f, `<div class="stats-num created"><div class="val">%d</div><div class="lbl">Created</div></div>`, created)
+	fmt.Fprintf(f, `<div class="stats-num updated"><div class="val">%d</div><div class="lbl">Updated</div></div>`, updated)
+	fmt.Fprintf(f, `<div class="stats-num skipped"><div class="val">%d</div><div class="lbl">Skipped</div></div>`, skipped)
+	fmt.Fprintf(f, `<div class="stats-num failed"><div class="val">%d</div><div class="lbl">Failed</div></div>`, failed)
+	fmt.Fprintf(f, `</div>`)
+	fmt.Fprintf(f, `<div style="margin-top:12px;font-size:12px;color:#888">%d group(s) &nbsp;·&nbsp; %d project(s) &nbsp;·&nbsp; %d domain(s)</div>`, groupCount, projectCount, domainsRun)
+	fmt.Fprintf(f, `</div>`)
+
+	// Panel 2 — Project health
+	fmt.Fprintf(f, `<div class="stats-card"><h3>Project Health</h3><div class="stats-numbers">`)
+	fmt.Fprintf(f, `<div class="stats-num good"><div class="val">%d</div><div class="lbl">In Sync</div></div>`, inSync)
+	fmt.Fprintf(f, `<div class="stats-num warn"><div class="val">%d</div><div class="lbl">Had Changes</div></div>`, hadChanges)
+	fmt.Fprintf(f, `<div class="stats-num bad"><div class="val">%d</div><div class="lbl">Had Failures</div></div>`, hadFailures)
+	fmt.Fprintf(f, `</div></div>`)
+
+	// Panel 3 — Domain breakdown
+	fmt.Fprintf(f, `<div class="stats-card"><h3>By Domain</h3>`)
+	fmt.Fprintf(f, `<table class="domain-stats-table"><thead><tr><th>Domain</th><th>Created</th><th>Updated</th><th>Skipped</th><th>Failed</th></tr></thead><tbody>`)
+	for _, name := range domainOrder {
+		ds := domainMap[name]
+		fmtNum := func(n int, cls string) string {
+			if n == 0 {
+				return fmt.Sprintf(`<td class="dst-zero">—</td>`)
+			}
+			return fmt.Sprintf(`<td class="%s">%d</td>`, cls, n)
+		}
+		fmt.Fprintf(f, `<tr><td>%s</td>%s%s%s%s</tr>`,
+			htmlEsc(name),
+			fmtNum(ds.created, "dst-created"),
+			fmtNum(ds.updated, "dst-updated"),
+			fmtNum(ds.skipped, ""),
+			fmtNum(ds.failed, "dst-failed"),
+		)
+	}
+	fmt.Fprintf(f, `</tbody></table></div>`)
+
+	fmt.Fprintf(f, `</div>`) // close stats-grid
 }
