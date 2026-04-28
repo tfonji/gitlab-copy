@@ -48,6 +48,17 @@ func EnumerateProjects(cfg *config.Config, srcClient *gitlab.Client) ([]ProjectE
 				if isExcluded(p.PathWithNamespace, cfg.Projects.Exclude) {
 					continue
 				}
+				// Also exclude projects whose group is excluded
+				if isExcluded(groupFromProjectPath(p.PathWithNamespace), cfg.Groups.Exclude) {
+					continue
+				}
+				// Apply max_depth — 0 means unlimited
+				if cfg.Projects.MaxDepth > 0 {
+					depth := projectDepth(p.PathWithNamespace, groupPath)
+					if depth > cfg.Projects.MaxDepth {
+						continue
+					}
+				}
 				seen[p.PathWithNamespace] = true
 				entries = append(entries, ProjectEntry{
 					ProjectPath: p.PathWithNamespace,
@@ -104,6 +115,19 @@ func groupFromProjectPath(projectPath string) string {
 		return ""
 	}
 	return projectPath[:idx]
+}
+
+// projectDepth returns how many subgroup levels deep a project is relative
+// to the top-level group being enumerated.
+// Examples (groupPath = "fxpayments"):
+//
+//	fxpayments/project-a           → depth 0
+//	fxpayments/dast/project-a      → depth 1
+//	fxpayments/dast/scan/project-a → depth 2
+func projectDepth(projectPath, groupPath string) int {
+	relative := strings.TrimPrefix(projectPath, groupPath+"/")
+	// depth = number of "/" in relative path (each "/" is a subgroup boundary)
+	return strings.Count(relative, "/")
 }
 
 type GroupEntry struct {

@@ -172,6 +172,7 @@ projects:
     - fxpayments/OBSOLETE-*           # exclude by name pattern
   include_subgroups: true
   include_archived: false
+  max_depth: 0                        # 0 = unlimited, 1 = top group + direct subgroups only, 2 = one level deeper
 
 concurrency:
   groups: 5
@@ -240,18 +241,20 @@ Domains run in the order listed. For compliance, `compliance_frameworks` must ap
 
 Control scope through a combination of config and CLI flags.
 
-**Exclude specific subgroups or projects:**
+**Exclude specific subgroups and their projects:**
 
 ```yaml
 groups:
   exclude:
-    - fxpayments/dast/*              # skip all dast projects
-    - fxpayments/dast_rest_scan/*    # skip all dast_rest_scan projects
+    - fxpayments/dast/*              # skips group domains AND all projects under dast
+    - fxpayments/dast_rest_scan/*    # same for dast_rest_scan
 
 projects:
   exclude:
-    - fxpayments/OBSOLETE-*          # skip projects prefixed with OBSOLETE-
+    - fxpayments/OBSOLETE-*          # skip specific projects by name (no group exclusion needed)
 ```
+
+`groups.exclude` patterns apply to both group domains and project enumeration — excluding a group automatically excludes all its projects. Use `projects.exclude` only for project-specific patterns that don't map to a group exclusion.
 
 **Exclusion pattern syntax:**
 
@@ -260,6 +263,27 @@ projects:
 | `fxpayments/dast` | Exact path only |
 | `fxpayments/dast_*` | Single-level glob — direct children matching the pattern |
 | `fxpayments/dast/*` | Deep glob — all descendants at any depth below `fxpayments/dast` |
+
+**Limit how deep into subgroups to enumerate projects:**
+
+```yaml
+projects:
+  include_subgroups: true
+  max_depth: 1              # top group + direct subgroup projects only
+```
+
+| Value | Projects included |
+|---|---|
+| `0` (default) | All projects at any depth — unlimited |
+| `1` | Projects in the top group + projects one subgroup deep |
+| `2` | All of the above + one more subgroup level |
+
+Example with `max_depth: 1` under group `fxpayments`:
+```
+fxpayments/fx-posting-soap            ✓  depth 0
+fxpayments/dast/project-a             ✓  depth 1
+fxpayments/dast/rest_scan/project-b   ✗  depth 2 — excluded
+```
 
 **Target a specific group at runtime (overrides config):**
 
@@ -465,7 +489,7 @@ domains:
 ./gitlab-copy projects all -config batch-3-push-rules-only.yaml
 ```
 
-**Exclude specific subgroups:**
+**Exclude specific subgroups and their projects:**
 
 ```yaml
 # config.yaml
@@ -479,7 +503,7 @@ groups:
 ./gitlab-copy all -config config.yaml
 ```
 
-Projects under `dast` and `dast_rest_scan` will be enumerated but skipped due to the exclusion rules.
+Groups and all their projects under `dast` and `dast_rest_scan` will be excluded. No need to repeat the patterns under `projects.exclude`.
 
 ---
 
@@ -672,7 +696,7 @@ A clean gitlab-diff report (all green, no diffs) means source and dest match on 
 This means `compliance_frameworks` ran but the framework wasn't created — likely because it failed silently or the pipeline config path was invalid. Check the gitlab-copy report for the `compliance_frameworks` domain. Fix any errors there and re-run — `compliance_assignments` will pick up the framework IDs on the next run.
 
 ---
-prooooooo
+
 **Q: Can I run this in a CI pipeline?**
 
 Yes. Use `-no-color` to disable ANSI codes in CI logs, and check the exit code:

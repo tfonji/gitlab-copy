@@ -33,6 +33,9 @@ projects:
   exclude: []                         # exclusion patterns (same syntax as groups.exclude)
   include_subgroups: true             # include projects in subgroups when deriving from groups
   include_archived: false             # include archived projects
+  max_depth: 0                        # 0 = unlimited depth (default)
+    # 1 = projects in top group + direct subgroup projects only
+  # 2 = one level deeper, etc.
 
 # ---------------------------------------------------------------------------
 # Concurrency — parallel API calls

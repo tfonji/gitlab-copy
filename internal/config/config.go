@@ -27,6 +27,7 @@ type ProjectsConfig struct {
 	Exclude          []string `yaml:"exclude"`
 	IncludeSubgroups bool     `yaml:"include_subgroups"`
 	IncludeArchived  bool     `yaml:"include_archived"`
+	MaxDepth         int      `yaml:"max_depth"` // 0 = unlimited, 1 = direct subgroups only, 2 = one level deeper, etc.
 }
 
 type GroupsConfig struct {
