@@ -376,6 +376,10 @@ func (c *GroupCopier) copyMRApprovalSettings(groupPath string) internal.DomainCo
 		return result
 	}
 
+	if dst == nil {
+		dst = &gitlab.MergeRequestApprovalSettings{}
+	}
+
 	diffs := mrApprovalSettingsDiffs(src, dst)
 	if len(diffs) == 0 {
 		result.Items = []internal.ItemResult{

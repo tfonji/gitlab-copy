@@ -672,7 +672,7 @@ A clean gitlab-diff report (all green, no diffs) means source and dest match on 
 This means `compliance_frameworks` ran but the framework wasn't created — likely because it failed silently or the pipeline config path was invalid. Check the gitlab-copy report for the `compliance_frameworks` domain. Fix any errors there and re-run — `compliance_assignments` will pick up the framework IDs on the next run.
 
 ---
-
+prooooooo
 **Q: Can I run this in a CI pipeline?**
 
 Yes. Use `-no-color` to disable ANSI codes in CI logs, and check the exit code:

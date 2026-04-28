@@ -558,6 +558,11 @@ func (c *ProjectCopier) copyProjectMRApprovals(projectPath string) internal.Doma
 		return result
 	}
 
+	// If dst is nil there are no existing settings — treat as an update from defaults
+	if dst == nil {
+		dst = &gitlab.ProjectApprovalSettings{}
+	}
+
 	diffs := projectMRApprovalsDiffs(src, dst)
 	if len(diffs) == 0 {
 		result.Items = []internal.ItemResult{
