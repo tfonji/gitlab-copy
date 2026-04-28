@@ -366,18 +366,19 @@ func (c *ProjectCopier) copyPipelineTriggers(projectPath string) internal.Domain
 		}
 
 		req := gitlab.PipelineTriggerRequest{Description: trigger.Description}
-		if err := c.dst.CreateProjectTrigger(projectPath, req); err != nil {
+		resp, err := c.dst.CreateProjectTrigger(projectPath, req)
+		if err != nil {
 			result.Items = append(result.Items, internal.ItemResult{
 				Key:    trigger.Description,
 				Action: internal.ActionFailed,
 				Error:  err,
 			})
 		} else {
-			// Token is auto-generated on dest — cannot be copied from source
 			result.Items = append(result.Items, internal.ItemResult{
 				Key:    trigger.Description,
 				Action: internal.ActionCreated,
-				Error:  fmt.Errorf("trigger token is newly generated — update any CI variables referencing the source token"),
+				Token:  resp.Token,
+				Error:  fmt.Errorf("new token generated — update any CI variables or webhook URLs referencing the source token"),
 			})
 		}
 	}

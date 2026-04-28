@@ -26,6 +26,7 @@ func WriteJSON(result *internal.RunResult, dir string) (string, error) {
 		Action string     `json:"action"`
 		DryRun bool       `json:"dry_run"`
 		Error  string     `json:"error,omitempty"`
+		Token  string     `json:"token,omitempty"`
 		Diffs  []jsonDiff `json:"diffs,omitempty"`
 	}
 	type jsonDomain struct {
@@ -58,6 +59,9 @@ func WriteJSON(result *internal.RunResult, dir string) (string, error) {
 			ji := jsonItem{Key: item.Key, Action: item.Label(), DryRun: item.DryRun}
 			if item.Error != nil {
 				ji.Error = item.Error.Error()
+			}
+			if item.Token != "" {
+				ji.Token = item.Token
 			}
 			for _, d := range item.Diffs {
 				ji.Diffs = append(ji.Diffs, jsonDiff{Field: d.Field, Src: d.Src, Dst: d.Dst})

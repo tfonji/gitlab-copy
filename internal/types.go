@@ -25,6 +25,7 @@ type ItemResult struct {
 	DryRun bool       // if true, Action is what WOULD have happened — no write was made
 	Error  error      // only set when Action == ActionFailed or as a warning
 	Diffs  []DiffLine // populated for Updated items to show what changed
+	Token  string     // newly generated token value, shown in report for copy (e.g. pipeline triggers)
 }
 
 // Label returns the display string for the item's action, incorporating

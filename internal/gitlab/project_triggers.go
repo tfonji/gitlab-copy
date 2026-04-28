@@ -32,10 +32,23 @@ func (c *Client) GetProjectTriggers(projectPath string) ([]PipelineTrigger, erro
 	return triggers, nil
 }
 
+// PipelineTriggerResponse is the response from POST /triggers — includes
+// the full token value which is only available at creation time.
+type PipelineTriggerResponse struct {
+	ID          int    `json:"id"`
+	Description string `json:"description"`
+	Token       string `json:"token"`
+}
+
 // --- Write ---
 
-// CreateProjectTrigger creates a pipeline trigger on the dest project.
-// Note: the trigger token is auto-generated and will differ from source.
-func (c *Client) CreateProjectTrigger(projectPath string, req PipelineTriggerRequest) error {
-	return c.post("/projects/"+encodePath(projectPath)+"/triggers", req, nil)
+// CreateProjectTrigger creates a pipeline trigger on the dest project and
+// returns the full response including the newly generated token value.
+// The token is only available in this response — it cannot be retrieved later.
+func (c *Client) CreateProjectTrigger(projectPath string, req PipelineTriggerRequest) (*PipelineTriggerResponse, error) {
+	var resp PipelineTriggerResponse
+	if err := c.post("/projects/"+encodePath(projectPath)+"/triggers", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
