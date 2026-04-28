@@ -54,6 +54,10 @@ func (c *ProjectCopier) copyDomain(projectPath, domain string) internal.DomainCo
 		return c.copyProtectedBranches(projectPath)
 	case "project_protected_tags":
 		return c.copyProtectedTags(projectPath)
+	case "deploy_tokens":
+		return c.copyProjectDeployTokens(projectPath)
+	case "access_tokens":
+		return c.copyProjectAccessTokens(projectPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -950,6 +954,146 @@ func (c *ProjectCopier) copyProtectedTags(projectPath string) internal.DomainCop
 				item.Error = fmt.Errorf("user/group-specific access levels not copied — role-based levels only")
 			}
 			result.Items = append(result.Items, item)
+		}
+	}
+
+	return result
+}
+
+// --- deploy_tokens ---
+
+func (c *ProjectCopier) copyProjectDeployTokens(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "deploy_tokens"}
+
+	srcTokens, err := c.src.GetProjectDeployTokens(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source deploy tokens: %w", err)
+		return result
+	}
+	dstTokens, err := c.dst.GetProjectDeployTokens(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest deploy tokens: %w", err)
+		return result
+	}
+
+	dstByName := make(map[string]bool, len(dstTokens))
+	for _, t := range dstTokens {
+		dstByName[t.Name] = true
+	}
+
+	sort.Slice(srcTokens, func(i, j int) bool {
+		return srcTokens[i].Name < srcTokens[j].Name
+	})
+
+	for _, src := range srcTokens {
+		if dstByName[src.Name] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionCreated,
+				DryRun: true,
+			})
+			continue
+		}
+
+		req := gitlab.DeployTokenRequest{
+			Name:      src.Name,
+			Username:  src.Username,
+			ExpiresAt: src.ExpiresAt,
+			Scopes:    src.Scopes,
+		}
+		resp, err := c.dst.CreateProjectDeployToken(projectPath, req)
+		if err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionCreated,
+				Token:  resp.Token,
+				Error:  fmt.Errorf("new token generated — update any services referencing the source token"),
+			})
+		}
+	}
+
+	return result
+}
+
+// --- access_tokens ---
+
+func (c *ProjectCopier) copyProjectAccessTokens(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "access_tokens"}
+
+	srcTokens, err := c.src.GetProjectAccessTokens(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source access tokens: %w", err)
+		return result
+	}
+	dstTokens, err := c.dst.GetProjectAccessTokens(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest access tokens: %w", err)
+		return result
+	}
+
+	dstByName := make(map[string]bool, len(dstTokens))
+	for _, t := range dstTokens {
+		dstByName[t.Name] = true
+	}
+
+	sort.Slice(srcTokens, func(i, j int) bool {
+		return srcTokens[i].Name < srcTokens[j].Name
+	})
+
+	for _, src := range srcTokens {
+		if dstByName[src.Name] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionCreated,
+				DryRun: true,
+			})
+			continue
+		}
+
+		req := gitlab.AccessTokenRequest{
+			Name:        src.Name,
+			Scopes:      src.Scopes,
+			ExpiresAt:   src.ExpiresAt,
+			AccessLevel: src.AccessLevel,
+		}
+		resp, err := c.dst.CreateProjectAccessToken(projectPath, req)
+		if err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.Name,
+				Action: internal.ActionCreated,
+				Token:  resp.Token,
+				Error:  fmt.Errorf("new token generated — update any services referencing the source token"),
+			})
 		}
 	}
 

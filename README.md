@@ -544,6 +544,8 @@ Red shows the current dest value. Green shows the source value that will be appl
 | `compliance_frameworks` | Compliance framework definitions (name, description, color, pipeline config path) | Pipeline config path must exist on dest |
 | `compliance_assignments` | Which projects have which compliance frameworks assigned | Must run after `compliance_frameworks` |
 | `security_policy_project` | Links the security policy project to the group | The policy project must already exist on dest (migrated by Congregate) with the same full path |
+| `deploy_tokens` | Group deploy tokens — name, username, scopes, expiry preserved | New token value generated on dest — surfaced in report |
+| `access_tokens` | Group access tokens — name, scopes, access level, expiry preserved | New token value generated on dest — surfaced in report |
 
 ### Project domains
 
@@ -561,6 +563,8 @@ Red shows the current dest value. Green shows the source value that will be appl
 | `badges` | Project-level pipeline status and coverage badges | |
 | `project_protected_branches` | Branch protection rules | User/group-specific access levels are not copied — role-based only |
 | `project_protected_tags` | Tag protection rules | User/group-specific access levels are not copied — role-based only |
+| `deploy_tokens` | Project deploy tokens — name, username, scopes, expiry preserved | New token value generated on dest — surfaced in report |
+| `access_tokens` | Project access tokens — name, scopes, access level, expiry preserved | New token value generated on dest — surfaced in report |
 
 ---
 
@@ -570,8 +574,6 @@ These items cannot be copied by the tool. They require manual action on the dest
 
 | Item | Why | Action required |
 |---|---|---|
-| **Group/project access tokens** | Token value is only shown once at creation — cannot be read back | Create new tokens on dest with the same name and scopes |
-| **Deploy tokens** | Token secret cannot be exported | Regenerate on dest and update any services using them |
 | **Masked/hidden variables** | Values are masked in API responses — reads return empty | Create variables manually on dest with the correct values |
 | **Jira credentials** | Password/token are masked in source API response | After copy, open the Jira integration on dest and re-enter credentials |
 | **MR approval rule approvers** | User IDs are instance-specific — they don't map across instances | After rules are created, assign approvers manually on dest |

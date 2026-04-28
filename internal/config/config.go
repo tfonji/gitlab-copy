@@ -65,6 +65,8 @@ var DefaultGroupDomains = []string{
 	"compliance_frameworks",
 	"compliance_assignments",
 	"security_policy_project",
+	"deploy_tokens",
+	"access_tokens",
 }
 
 var DefaultProjectDomains = []string{
@@ -80,6 +82,8 @@ var DefaultProjectDomains = []string{
 	"badges",
 	"project_protected_branches",
 	"project_protected_tags",
+	"deploy_tokens",
+	"access_tokens",
 }
 
 func Load(path string) (*Config, error) {

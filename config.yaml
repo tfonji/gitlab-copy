@@ -60,6 +60,8 @@ domains:
     - compliance_frameworks           # compliance framework definitions (name, description, color, pipeline config)
     - compliance_assignments          # which projects have which frameworks assigned (run after compliance_frameworks)
     - security_policy_project         # links the security policy project to the group — requires the policy project to exist on dest first
+    - deploy_tokens                   # group deploy tokens (new token value generated on dest — surfaced in report)
+    - access_tokens                   # group access tokens — same name, scopes and access level copied, new token value surfaced in report
 
   projects:
     - topics                          # project tags/labels (AppID, CMDB ID, etc.)
@@ -74,6 +76,8 @@ domains:
     - badges                          # pipeline status and coverage badges
     - project_protected_branches      # branch protection rules (role-based access levels only)
     - project_protected_tags          # tag protection rules (role-based access levels only)
+    - deploy_tokens                   # project deploy tokens (new token value generated on dest — surfaced in report)
+    - access_tokens                   # project access tokens — same name, scopes and access level copied, new token value surfaced in report
 
 # Domains NOT listed here (cannot be automated):
 #   security_policies       — no API for linking a policy project, configure via UI
