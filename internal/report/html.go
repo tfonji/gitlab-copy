@@ -84,7 +84,6 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
   .item-key { color: #333; font-family: monospace; }
   .item-warn { color: #e67e22; font-size: 12px; margin-left: 4px; }
   .item-err  { color: #c0392b; font-size: 12px; margin-left: 4px; }
-  .item-token { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; margin-top: 2px; background: #f8f8f8; border: 1px solid #eee; border-radius: 4px; padding: 2px 8px; font-family: monospace; font-size: 12px; color: #333; }
   .all-skipped { color: #aaa; font-size: 12px; font-style: italic; }
   .diff-list { margin: 4px 0 6px 0; background: #fafafa; border-radius: 4px; padding: 6px 10px; border-left: 3px solid #f0c040; }
   .diff-row { display: flex; gap: 8px; align-items: baseline; font-size: 12px; padding: 3px 0; font-family: monospace; flex-wrap: wrap; }
@@ -363,8 +362,7 @@ func writeDomainRowHTML(f *os.File, d internal.DomainCopyResult) {
 		fmt.Fprintf(f, `<div class="item-row"><span class="item-label %s">%s</span><span class="item-key">%s</span>%s</div>`,
 			labelClass, labelText, htmlEsc(item.Key), extra)
 		if item.Token != "" {
-			fmt.Fprintf(f, `<div style="padding:2px 0 4px 0"><span class="item-warn">⚠ new token generated — update CI variables referencing the source token</span><span class="item-token">%s</span></div>`,
-				htmlEsc(item.Token))
+			fmt.Fprintf(f, `<div style="padding:2px 0 4px 0"><span class="item-warn">⚠ new token generated — see <code>gitlab-copy-tokens.md</code> for the token value</span></div>`)
 		}
 		if len(item.Diffs) > 0 {
 			fmt.Fprintf(f, `<div class="diff-list">`)

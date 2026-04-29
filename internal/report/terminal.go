@@ -129,11 +129,10 @@ func (t *Terminal) writeItem(indent string, item internal.ItemResult) {
 		t.writef("%s%s%s%s %s — %s\n",
 			indent, color, symbol, colorReset, item.Key, label)
 	}
-	// Render new token if present (e.g. pipeline triggers)
+	// Render new token notice — value is in gitlab-copy-tokens.md
 	if item.Token != "" {
-		t.writef("%s  %s⚠ new token generated — update CI variables referencing the source token%s\n",
+		t.writef("%s  %s⚠ new token generated — see gitlab-copy-tokens.md for the token value%s\n",
 			indent, colorYellow, colorReset)
-		t.writef("%s  %s%s%s\n", indent, colorDim, item.Token, colorReset)
 	}
 	for _, diff := range item.Diffs {
 		if diff.Match {

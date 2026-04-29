@@ -138,6 +138,13 @@ func main() {
 		}
 	}
 
+	// Always write tokens file if any tokens were generated
+	if hasTokens, err := report.WriteTokensReport(result, cfg.Output.Dir); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing tokens report: %v\n", err)
+	} else if hasTokens {
+		fmt.Fprintf(os.Stdout, "Tokens report: %s/gitlab-copy-tokens.md  ⚠ SENSITIVE — store securely\n", cfg.Output.Dir)
+	}
+
 	if result.HasFailures {
 		os.Exit(1)
 	}
