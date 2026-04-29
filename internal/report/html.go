@@ -142,15 +142,9 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
 <body>
 <header>
   <h1>%s</h1>
-  <div class="meta">Generated: %s MST</div>
+  <div class="meta">Generated: %s</div>
 </header>
-`, title, title, func() string {
-		loc, err := time.LoadLocation("America/Phoenix")
-		if err != nil {
-			loc = time.UTC
-		}
-		return time.Now().In(loc).Format("2006-01-02 15:04:05")
-	}())
+`, title, title, time.Now().Format("2006-01-02 15:04:05 MST"))
 
 	// Status banner
 	if result.DryRun {
