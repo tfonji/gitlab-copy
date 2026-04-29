@@ -92,6 +92,8 @@ func (c *Client) ListGroupProjects(groupPath string, includeSubgroups, includeAr
 		params.Set("page", fmt.Sprintf("%d", page))
 		if includeSubgroups {
 			params.Set("include_subgroups", "true")
+		} else {
+			params.Set("include_subgroups", "false")
 		}
 		if !includeArchived {
 			params.Set("archived", "false")
