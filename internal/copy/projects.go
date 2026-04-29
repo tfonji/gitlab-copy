@@ -85,43 +85,51 @@ func (c *ProjectCopier) copyTopics(projectPath string) internal.DomainCopyResult
 	}
 
 	if len(src.Topics) == 0 {
-		result.Items = []internal.ItemResult{
-			{Key: "topics", Action: internal.ActionSkipped, DryRun: c.dryRun},
-		}
 		return result
 	}
 
-	if topicsEqual(src.Topics, dst.Topics) {
-		result.Items = []internal.ItemResult{
-			{Key: "topics", Action: internal.ActionSkipped, DryRun: c.dryRun},
+	// Build dest topic set for comparison
+	dstTopics := make(map[string]bool, len(dst.Topics))
+	for _, t := range dst.Topics {
+		dstTopics[t] = true
+	}
+
+	// Determine per-topic actions
+	var toCreate []string
+	for _, t := range src.Topics {
+		if dstTopics[t] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    t,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+		} else {
+			toCreate = append(toCreate, t)
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    t,
+				Action: internal.ActionCreated,
+				DryRun: c.dryRun,
+			})
 		}
+	}
+
+	if len(toCreate) == 0 || c.dryRun {
 		return result
 	}
 
-	action := internal.ActionUpdated
-	if len(dst.Topics) == 0 {
-		action = internal.ActionCreated
-	}
-
-	if c.dryRun {
-		result.Items = []internal.ItemResult{
-			{Key: "topics", Action: action, DryRun: true},
-		}
-		return result
-	}
-
+	// Apply — replace the full topic list with source topics
 	if err := c.dst.UpdateProject(projectPath, gitlab.ProjectUpdateRequest{
 		Topics: src.Topics,
 	}); err != nil {
-		result.Items = []internal.ItemResult{
-			{Key: "topics", Action: internal.ActionFailed, Error: err},
+		// Mark the would-be-created items as failed
+		for i := range result.Items {
+			if result.Items[i].Action == internal.ActionCreated {
+				result.Items[i].Action = internal.ActionFailed
+				result.Items[i].Error = err
+			}
 		}
-		return result
 	}
 
-	result.Items = []internal.ItemResult{
-		{Key: "topics", Action: action},
-	}
 	return result
 }
 
