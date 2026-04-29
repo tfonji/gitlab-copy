@@ -95,30 +95,6 @@ func WriteTokensReport(result *internal.RunResult, dir string) (bool, error) {
 		)
 	}
 
-	fmt.Fprintf(f, "\n---\n\n")
-	fmt.Fprintf(f, "## What to update\n\n")
-
-	// Group by domain type for actionable guidance
-	hasTrigger := hasType(entries, "pipeline_triggers")
-	hasDeployToken := hasType(entries, "deploy_tokens")
-	hasAccessToken := hasType(entries, "access_tokens")
-
-	if hasTrigger {
-		fmt.Fprintf(f, "### Pipeline trigger tokens (`glptt-...`)\n\n")
-		fmt.Fprintf(f, "Update any CI/CD variables or external systems that call the trigger API URL.\n")
-		fmt.Fprintf(f, "Typically stored in project variables like `TRIGGER_TOKEN` or passed in webhook URLs.\n\n")
-	}
-	if hasDeployToken {
-		fmt.Fprintf(f, "### Deploy tokens (`gldt-...`)\n\n")
-		fmt.Fprintf(f, "Update any services using these tokens to pull packages or container images.\n")
-		fmt.Fprintf(f, "Commonly used in CI config, Kubernetes image pull secrets, or `.npmrc`/`.mvn` settings.\n\n")
-	}
-	if hasAccessToken {
-		fmt.Fprintf(f, "### Access tokens (`glpat-...`)\n\n")
-		fmt.Fprintf(f, "Update any automation, scripts, or integrations authenticating with these tokens.\n")
-		fmt.Fprintf(f, "Check CI variables, config files, and any external tools that use the GitLab API.\n\n")
-	}
-
 	return true, nil
 }
 
@@ -133,15 +109,6 @@ func tokenTypeLabel(domain string) string {
 	default:
 		return strings.ReplaceAll(domain, "_", " ")
 	}
-}
-
-func hasType(entries []TokenEntry, domain string) bool {
-	for _, e := range entries {
-		if e.Domain == domain {
-			return true
-		}
-	}
-	return false
 }
 
 func mdEsc(s string) string {
