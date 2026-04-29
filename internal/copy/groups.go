@@ -3,6 +3,7 @@ package copy
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"gitlab-copy/internal"
 	"gitlab-copy/internal/gitlab"
@@ -212,7 +213,7 @@ func (c *GroupCopier) copyDefaultBranchProtection(groupPath string) internal.Dom
 	}
 
 	diffs := defaultBranchProtectionDiffs(src, dst)
-	if len(diffs) == 0 {
+	if !hasChanges(diffs) {
 		result.Items = []internal.ItemResult{
 			{Key: "default_branch_protection", Action: internal.ActionSkipped, DryRun: c.dryRun},
 		}
@@ -260,7 +261,7 @@ func (c *GroupCopier) copyMRSettings(groupPath string) internal.DomainCopyResult
 	}
 
 	diffs := mrSettingsDiffs(src, dst)
-	if len(diffs) == 0 {
+	if !hasChanges(diffs) {
 		result.Items = []internal.ItemResult{
 			{Key: "mr_settings", Action: internal.ActionSkipped, DryRun: c.dryRun},
 		}
@@ -381,7 +382,7 @@ func (c *GroupCopier) copyMRApprovalSettings(groupPath string) internal.DomainCo
 	}
 
 	diffs := mrApprovalSettingsDiffs(src, dst)
-	if len(diffs) == 0 {
+	if !hasChanges(diffs) {
 		result.Items = []internal.ItemResult{
 			{Key: "mr_approval_settings", Action: internal.ActionSkipped, DryRun: c.dryRun},
 		}
@@ -538,9 +539,11 @@ func (c *GroupCopier) copyDescription(groupPath string) internal.DomainCopyResul
 		return result
 	}
 
+	diffs := []internal.DiffLine{{Field: "description", Src: src.Description, Dst: dst.Description}}
+
 	if c.dryRun {
 		result.Items = []internal.ItemResult{
-			{Key: "description", Action: internal.ActionUpdated, DryRun: true},
+			{Key: "description", Action: internal.ActionUpdated, DryRun: true, Diffs: diffs},
 		}
 		return result
 	}
@@ -555,7 +558,7 @@ func (c *GroupCopier) copyDescription(groupPath string) internal.DomainCopyResul
 	}
 
 	result.Items = []internal.ItemResult{
-		{Key: "description", Action: internal.ActionUpdated},
+		{Key: "description", Action: internal.ActionUpdated, Diffs: diffs},
 	}
 	return result
 }
@@ -977,11 +980,20 @@ func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.Domai
 			}
 
 			if err := c.dst.AssignComplianceFramework(assignment.ProjectPath, dstID); err != nil {
-				result.Items = append(result.Items, internal.ItemResult{
-					Key:    itemKey,
-					Action: internal.ActionFailed,
-					Error:  err,
-				})
+				// If the mutation doesn't exist, the dest instance doesn't support it
+				if strings.Contains(err.Error(), "doesn't exist on type 'Mutation'") {
+					result.Items = append(result.Items, internal.ItemResult{
+						Key:    itemKey,
+						Action: internal.ActionSkipped,
+						Error:  fmt.Errorf("assignComplianceFramework mutation not supported on this GitLab version — assign manually via UI"),
+					})
+				} else {
+					result.Items = append(result.Items, internal.ItemResult{
+						Key:    itemKey,
+						Action: internal.ActionFailed,
+						Error:  err,
+					})
+				}
 			} else {
 				result.Items = append(result.Items, internal.ItemResult{
 					Key:    itemKey,
@@ -1040,8 +1052,12 @@ func (c *GroupCopier) copySecurityPolicyProject(groupPath string) internal.Domai
 	}
 
 	if err := c.dst.LinkSecurityPolicyProject(groupPath, src.FullPath); err != nil {
+		errMsg := err
+		if apiErr, ok := err.(*gitlab.APIError); ok && apiErr.IsNotFound() {
+			errMsg = fmt.Errorf("security policy project %q not found on dest — ensure Congregate has migrated it first", src.FullPath)
+		}
 		result.Items = []internal.ItemResult{
-			{Key: src.FullPath, Action: internal.ActionFailed, Error: err},
+			{Key: src.FullPath, Action: internal.ActionFailed, Error: errMsg},
 		}
 		return result
 	}

@@ -10,11 +10,14 @@ const (
 	ActionFailed  CopyAction = "failed"
 )
 
-// DiffLine shows a single field that differs between source and dest.
+// DiffLine shows a field comparison between source and dest.
+// When Match is true the values are equal — shown in muted style.
+// When Match is false the values differ — shown highlighted.
 type DiffLine struct {
 	Field string
 	Src   string
 	Dst   string
+	Match bool // true = values are equal (informational), false = values differ
 }
 
 // ItemResult is one item within a domain — either a singleton (push_rules,

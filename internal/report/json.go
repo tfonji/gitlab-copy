@@ -20,6 +20,7 @@ func WriteJSON(result *internal.RunResult, dir string) (string, error) {
 		Field string `json:"field"`
 		Src   string `json:"src"`
 		Dst   string `json:"dst"`
+		Match bool   `json:"match"`
 	}
 	type jsonItem struct {
 		Key    string     `json:"key"`
@@ -64,7 +65,7 @@ func WriteJSON(result *internal.RunResult, dir string) (string, error) {
 				ji.Token = item.Token
 			}
 			for _, d := range item.Diffs {
-				ji.Diffs = append(ji.Diffs, jsonDiff{Field: d.Field, Src: d.Src, Dst: d.Dst})
+				ji.Diffs = append(ji.Diffs, jsonDiff{Field: d.Field, Src: d.Src, Dst: d.Dst, Match: d.Match})
 			}
 			jd.Items = append(jd.Items, ji)
 		}

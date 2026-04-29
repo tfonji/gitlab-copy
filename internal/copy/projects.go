@@ -578,7 +578,7 @@ func (c *ProjectCopier) copyProjectMRApprovals(projectPath string) internal.Doma
 	}
 
 	diffs := projectMRApprovalsDiffs(src, dst)
-	if len(diffs) == 0 {
+	if !hasChanges(diffs) {
 		result.Items = []internal.ItemResult{
 			{Key: "project_mr_approvals", Action: internal.ActionSkipped, DryRun: c.dryRun},
 		}

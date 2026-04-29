@@ -8,16 +8,28 @@ import (
 	"gitlab-copy/internal/gitlab"
 )
 
-// fieldDiff adds a DiffLine if src != dst.
+// fieldDiff always adds a DiffLine. Match=true means values are equal (shown muted),
+// Match=false means they differ (shown highlighted).
 func fieldDiff(diffs *[]internal.DiffLine, field string, src, dst any) {
 	s := fmt.Sprintf("%v", src)
 	d := fmt.Sprintf("%v", dst)
-	if s != d {
-		*diffs = append(*diffs, internal.DiffLine{Field: field, Src: s, Dst: d})
-	}
+	*diffs = append(*diffs, internal.DiffLine{
+		Field: field,
+		Src:   s,
+		Dst:   d,
+		Match: s == d,
+	})
 }
 
-// pushRuleDiffs returns diff lines between two PushRule structs.
+// hasChanges returns true if any DiffLine has Match=false (i.e. src != dst).
+func hasChanges(diffs []internal.DiffLine) bool {
+	for _, d := range diffs {
+		if !d.Match {
+			return true
+		}
+	}
+	return false
+}
 func pushRuleDiffs(src, dst *gitlab.PushRule) []internal.DiffLine {
 	var diffs []internal.DiffLine
 	fieldDiff(&diffs, "commit_message_regex", src.CommitMessageRegex, dst.CommitMessageRegex)

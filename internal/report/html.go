@@ -88,11 +88,14 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
   .all-skipped { color: #aaa; font-size: 12px; font-style: italic; }
   .diff-list { margin: 4px 0 6px 0; background: #fafafa; border-radius: 4px; padding: 6px 10px; border-left: 3px solid #f0c040; }
   .diff-row { display: flex; gap: 8px; align-items: baseline; font-size: 12px; padding: 3px 0; font-family: monospace; flex-wrap: wrap; }
+  .diff-row.match { opacity: 0.45; }
   .diff-field { color: #555; min-width: 220px; flex-shrink: 0; font-weight: 500; }
   .diff-label-src { color: #c0392b; font-weight: 700; font-size: 11px; }
   .diff-label-dst { color: #1e8449; font-weight: 700; font-size: 11px; }
+  .diff-label-match { color: #999; font-weight: 700; font-size: 11px; }
   .diff-val-src { color: #c0392b; }
   .diff-val-dst { color: #1e8449; }
+  .diff-val-match { color: #999; }
   .toggle-all { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; color: #555; margin-bottom: 16px; }
   .toggle-all:hover { background: #f5f5f5; }
   .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 0; }
@@ -366,8 +369,13 @@ func writeDomainRowHTML(f *os.File, d internal.DomainCopyResult) {
 		if len(item.Diffs) > 0 {
 			fmt.Fprintf(f, `<div class="diff-list">`)
 			for _, d := range item.Diffs {
-				fmt.Fprintf(f, `<div class="diff-row"><span class="diff-field">%s</span><span class="diff-label-src">dest:</span> <span class="diff-val-src">%s</span><span class="diff-label-dst">→ source:</span> <span class="diff-val-dst">%s</span></div>`,
-					htmlEsc(d.Field), htmlEsc(d.Dst), htmlEsc(d.Src))
+				if d.Match {
+					fmt.Fprintf(f, `<div class="diff-row match"><span class="diff-field">%s</span><span class="diff-label-match">source = dest:</span> <span class="diff-val-match">%s</span></div>`,
+						htmlEsc(d.Field), htmlEsc(d.Src))
+				} else {
+					fmt.Fprintf(f, `<div class="diff-row"><span class="diff-field">%s</span><span class="diff-label-src">dest:</span> <span class="diff-val-src">%s</span><span class="diff-label-dst">→ source:</span> <span class="diff-val-dst">%s</span></div>`,
+						htmlEsc(d.Field), htmlEsc(d.Dst), htmlEsc(d.Src))
+				}
 			}
 			fmt.Fprintf(f, `</div>`)
 		}

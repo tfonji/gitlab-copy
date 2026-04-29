@@ -136,11 +136,18 @@ func (t *Terminal) writeItem(indent string, item internal.ItemResult) {
 		t.writef("%s  %s%s%s\n", indent, colorDim, item.Token, colorReset)
 	}
 	for _, diff := range item.Diffs {
-		t.writef("%s  %s%s%s  %sdest:%s %s%s%s  %s→ source:%s %s%s%s\n",
-			indent,
-			colorDim, diff.Field, colorReset,
-			colorRed, colorReset, colorRed, diff.Dst, colorReset,
-			colorGreen, colorReset, colorGreen, diff.Src, colorReset)
+		if diff.Match {
+			t.writef("%s  %s%s  source = dest: %s%s\n",
+				indent,
+				colorDim, diff.Field,
+				diff.Src, colorReset)
+		} else {
+			t.writef("%s  %s%s%s  %sdest:%s %s%s%s  %s→ source:%s %s%s%s\n",
+				indent,
+				colorDim, diff.Field, colorReset,
+				colorRed, colorReset, colorRed, diff.Dst, colorReset,
+				colorGreen, colorReset, colorGreen, diff.Src, colorReset)
+		}
 	}
 }
 
