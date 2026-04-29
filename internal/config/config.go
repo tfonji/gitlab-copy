@@ -145,12 +145,6 @@ func (c *Config) applyDefaults() {
 	if len(c.Output.Formats) == 0 {
 		c.Output.Formats = []string{"terminal", "html", "json"}
 	}
-	if !c.Projects.IncludeSubgroups {
-		c.Projects.IncludeSubgroups = true
-	}
-	if !c.Groups.IncludeSubgroups {
-		c.Groups.IncludeSubgroups = true
-	}
 }
 
 func (c *Config) validate() error {
