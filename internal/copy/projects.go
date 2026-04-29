@@ -397,12 +397,24 @@ func (c *ProjectCopier) copyPipelineTriggers(projectPath string) internal.Domain
 func (c *ProjectCopier) copyDeployKeys(projectPath string) internal.DomainCopyResult {
 	result := internal.DomainCopyResult{Domain: "deploy_keys"}
 
-	srcKeys, err := c.src.GetProjectDeployKeys(projectPath)
+	// Fetch numeric IDs — the deploy keys API requires them
+	srcProject, err := c.src.GetProject(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source project: %w", err)
+		return result
+	}
+	dstProject, err := c.dst.GetProject(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest project: %w", err)
+		return result
+	}
+
+	srcKeys, err := c.src.GetProjectDeployKeys(srcProject.ID)
 	if err != nil {
 		result.Error = fmt.Errorf("fetching source deploy keys: %w", err)
 		return result
 	}
-	dstKeys, err := c.dst.GetProjectDeployKeys(projectPath)
+	dstKeys, err := c.dst.GetProjectDeployKeys(dstProject.ID)
 	if err != nil {
 		result.Error = fmt.Errorf("fetching dest deploy keys: %w", err)
 		return result
@@ -442,7 +454,7 @@ func (c *ProjectCopier) copyDeployKeys(projectPath string) internal.DomainCopyRe
 			Key:     key.Key,
 			CanPush: key.CanPush,
 		}
-		if err := c.dst.CreateProjectDeployKey(projectPath, req); err != nil {
+		if err := c.dst.CreateProjectDeployKey(dstProject.ID, req); err != nil {
 			// 422 means the public key already exists globally on the dest instance
 			if apiErr, ok := err.(*gitlab.APIError); ok && apiErr.StatusCode == 422 {
 				result.Items = append(result.Items, internal.ItemResult{

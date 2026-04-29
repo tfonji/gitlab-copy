@@ -6,6 +6,7 @@ import (
 )
 
 type Project struct {
+	ID                int    `json:"id"`
 	Name              string `json:"name"`
 	Path              string `json:"path"`
 	PathWithNamespace string `json:"path_with_namespace"`

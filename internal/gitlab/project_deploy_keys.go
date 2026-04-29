@@ -1,5 +1,7 @@
 package gitlab
 
+import "fmt"
+
 // DeployKey represents a project deploy key.
 type DeployKey struct {
 	ID        int    `json:"id"`
@@ -19,9 +21,9 @@ type DeployKeyRequest struct {
 
 // --- Read ---
 
-func (c *Client) GetProjectDeployKeys(projectPath string) ([]DeployKey, error) {
+func (c *Client) GetProjectDeployKeys(projectID int) ([]DeployKey, error) {
 	var keys []DeployKey
-	err := c.get("/projects/"+encodePath(projectPath)+"/deploy_keys", nil, &keys)
+	err := c.get(fmt.Sprintf("/projects/%d/deploy_keys", projectID), nil, &keys)
 	if err != nil {
 		if apiErr, ok := err.(*APIError); ok && apiErr.IsForbidden() {
 			return nil, nil
@@ -37,6 +39,6 @@ func (c *Client) GetProjectDeployKeys(projectPath string) ([]DeployKey, error) {
 // If the key already exists globally on the dest instance (same public key
 // content), GitLab returns 422. In that case the caller should report a
 // failure with a message to enable the key manually via the UI.
-func (c *Client) CreateProjectDeployKey(projectPath string, req DeployKeyRequest) error {
-	return c.post("/projects/"+encodePath(projectPath)+"/deploy_keys", req, nil)
+func (c *Client) CreateProjectDeployKey(projectID int, req DeployKeyRequest) error {
+	return c.post(fmt.Sprintf("/projects/%d/deploy_keys", projectID), req, nil)
 }
