@@ -85,6 +85,7 @@ var DefaultProjectDomains = []string{
 	"project_protected_tags",
 	"deploy_tokens",
 	"access_tokens",
+	"pipeline_schedules",
 }
 
 func Load(path string) (*Config, error) {

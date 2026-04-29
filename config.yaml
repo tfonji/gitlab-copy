@@ -81,6 +81,7 @@ domains:
     - project_protected_tags          # tag protection rules (role-based access levels only)
     - deploy_tokens                   # project deploy tokens (new token value generated on dest — surfaced in report)
     - access_tokens                   # project access tokens — same name, scopes and access level copied, new token value surfaced in report
+    - pipeline_schedules              # pipeline schedules — description, ref, cron, timezone, active state and variables copied; owner defaults to dest token user
 
 # Domains NOT listed here (cannot be automated):
 #   security_policies       — no API for linking a policy project, configure via UI

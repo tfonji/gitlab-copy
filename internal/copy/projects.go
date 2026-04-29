@@ -58,6 +58,8 @@ func (c *ProjectCopier) copyDomain(projectPath, domain string) internal.DomainCo
 		return c.copyProjectDeployTokens(projectPath)
 	case "access_tokens":
 		return c.copyProjectAccessTokens(projectPath)
+	case "pipeline_schedules":
+		return c.copyPipelineSchedules(projectPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -1100,6 +1102,117 @@ func (c *ProjectCopier) copyProjectAccessTokens(projectPath string) internal.Dom
 				Error:  fmt.Errorf("new token generated — update any services referencing the source token"),
 			})
 		}
+	}
+
+	return result
+}
+
+// --- pipeline_schedules ---
+
+func (c *ProjectCopier) copyPipelineSchedules(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "pipeline_schedules"}
+
+	srcSchedules, err := c.src.GetProjectPipelineSchedules(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source pipeline schedules: %w", err)
+		return result
+	}
+	if len(srcSchedules) == 0 {
+		return result
+	}
+
+	dstSchedules, err := c.dst.GetProjectPipelineSchedules(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest pipeline schedules: %w", err)
+		return result
+	}
+
+	// Match by description + cron + ref — natural key for schedules
+	type scheduleKey struct {
+		description string
+		cron        string
+		ref         string
+	}
+	dstByKey := make(map[scheduleKey]bool)
+	for _, s := range dstSchedules {
+		dstByKey[scheduleKey{s.Description, s.Cron, s.Ref}] = true
+	}
+
+	sort.Slice(srcSchedules, func(i, j int) bool {
+		return srcSchedules[i].Description < srcSchedules[j].Description
+	})
+
+	for _, sched := range srcSchedules {
+		key := scheduleKey{sched.Description, sched.Cron, sched.Ref}
+
+		if dstByKey[key] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    sched.Description,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		// Fetch variables for this schedule from source
+		srcVars, err := c.src.GetPipelineScheduleVariables(projectPath, sched.ID)
+		if err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    sched.Description,
+				Action: internal.ActionFailed,
+				Error:  fmt.Errorf("fetching source schedule variables: %w", err),
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    sched.Description,
+				Action: internal.ActionCreated,
+				DryRun: true,
+				Error:  fmt.Errorf("owner will be the dest token user — transfer ownership manually if needed"),
+			})
+			continue
+		}
+
+		// Create the schedule on dest
+		newID, err := c.dst.CreateProjectPipelineSchedule(projectPath, gitlab.PipelineScheduleRequest{
+			Description:  sched.Description,
+			Ref:          sched.Ref,
+			Cron:         sched.Cron,
+			CronTimezone: sched.CronTimezone,
+			Active:       sched.Active,
+		})
+		if err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    sched.Description,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+			continue
+		}
+
+		// Copy schedule variables
+		var varErrors []string
+		for _, v := range srcVars {
+			if err := c.dst.CreatePipelineScheduleVariable(projectPath, newID, gitlab.PipelineScheduleVariableRequest{
+				Key:          v.Key,
+				Value:        v.Value,
+				VariableType: v.VariableType,
+			}); err != nil {
+				varErrors = append(varErrors, fmt.Sprintf("%s: %v", v.Key, err))
+			}
+		}
+
+		item := internal.ItemResult{
+			Key:    sched.Description,
+			Action: internal.ActionCreated,
+			Error:  fmt.Errorf("owner is dest token user — transfer ownership manually if needed"),
+		}
+		if len(varErrors) > 0 {
+			item.Error = fmt.Errorf("owner is dest token user — transfer manually; variable errors: %s", strings.Join(varErrors, ", "))
+		}
+		result.Items = append(result.Items, item)
 	}
 
 	return result

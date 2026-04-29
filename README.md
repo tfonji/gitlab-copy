@@ -589,6 +589,7 @@ Red shows the current dest value. Green shows the source value that will be appl
 | `project_protected_tags` | Tag protection rules | User/group-specific access levels are not copied — role-based only |
 | `deploy_tokens` | Project deploy tokens — name, username, scopes, expiry preserved | New token value generated on dest — surfaced in report |
 | `access_tokens` | Project access tokens — name, scopes, access level, expiry preserved | New token value generated on dest — surfaced in report |
+| `pipeline_schedules` | Pipeline schedules — description, ref, cron, timezone, active state, and schedule variables | Owner defaults to dest token user — transfer ownership manually via GitLab UI if needed |
 
 ---
 
