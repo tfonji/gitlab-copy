@@ -839,6 +839,17 @@ func (c *ProjectCopier) copyProtectedBranches(projectPath string) internal.Domai
 		dstByName[b.Name] = b
 	}
 
+	// Deduplicate source branches by name — some GitLab versions return duplicates
+	seen := make(map[string]bool)
+	var dedupedSrc []gitlab.ProtectedBranch
+	for _, b := range srcBranches {
+		if !seen[b.Name] {
+			seen[b.Name] = true
+			dedupedSrc = append(dedupedSrc, b)
+		}
+	}
+	srcBranches = dedupedSrc
+
 	sort.Slice(srcBranches, func(i, j int) bool {
 		return srcBranches[i].Name < srcBranches[j].Name
 	})
@@ -923,6 +934,17 @@ func (c *ProjectCopier) copyProtectedTags(projectPath string) internal.DomainCop
 	for _, t := range dstTags {
 		dstByName[t.Name] = t
 	}
+
+	// Deduplicate source tags by name
+	seenTags := make(map[string]bool)
+	var dedupedSrcTags []gitlab.ProtectedTag
+	for _, t := range srcTags {
+		if !seenTags[t.Name] {
+			seenTags[t.Name] = true
+			dedupedSrcTags = append(dedupedSrcTags, t)
+		}
+	}
+	srcTags = dedupedSrcTags
 
 	sort.Slice(srcTags, func(i, j int) bool {
 		return srcTags[i].Name < srcTags[j].Name
