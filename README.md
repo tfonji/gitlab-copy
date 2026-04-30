@@ -114,10 +114,10 @@ The group has never been migrated. Run `all` to copy both group-level settings a
 
 ```bash
 # Dry-run
-./gitlab-copy all -config config.yaml -group fxpayments -dry-run
+./gitlab-copy all -config config.yaml -group group1 -dry-run
 
 # Apply
-./gitlab-copy all -config config.yaml -group fxpayments
+./gitlab-copy all -config config.yaml -group group1
 ```
 
 ### Batch 2+ — Existing group (additional APPID batches)
@@ -126,10 +126,10 @@ The group already exists on dest with correct settings from Batch 1. Only copy p
 
 ```bash
 # Dry-run
-./gitlab-copy projects all -config config.yaml -group fxpayments -dry-run
+./gitlab-copy projects all -config config.yaml -group group1 -dry-run
 
 # Apply
-./gitlab-copy projects all -config config.yaml -group fxpayments
+./gitlab-copy projects all -config config.yaml -group group1
 ```
 
 ### Single project
@@ -137,8 +137,8 @@ The group already exists on dest with correct settings from Batch 1. Only copy p
 Useful for re-running a specific project after a fix, or for one-off migrations:
 
 ```bash
-./gitlab-copy projects all -config config.yaml -project fxpayments/fx-posting-soap -dry-run
-./gitlab-copy projects all -config config.yaml -project fxpayments/fx-posting-soap
+./gitlab-copy projects all -config config.yaml -project group1/fx-posting-soap -dry-run
+./gitlab-copy projects all -config config.yaml -project group1/fx-posting-soap
 ```
 
 No group needs to be specified in the config for single-project runs.
@@ -160,16 +160,16 @@ destination:
 
 groups:
   include:
-    - fxpayments                      # group path(s) to process
+    - group1                      # group path(s) to process
   exclude:
-    - fxpayments/dast/*               # exclude all descendants of fxpayments/dast
-    - fxpayments/dast_rest_scan/*
+    - group1/dast/*               # exclude all descendants of group1/dast
+    - group1/dast_rest_scan/*
   include_subgroups: true
 
 projects:
   include: []                         # leave empty to derive from groups above
   exclude:
-    - fxpayments/OBSOLETE-*           # exclude by name pattern
+    - group1/OBSOLETE-*           # exclude by name pattern
   include_subgroups: true
   include_archived: false
   max_depth: 0                        # 0 = unlimited, 1 = top group + direct subgroups only, 2 = one level deeper
@@ -246,12 +246,12 @@ Control scope through a combination of config and CLI flags.
 ```yaml
 groups:
   exclude:
-    - fxpayments/dast/*              # skips group domains AND all projects under dast
-    - fxpayments/dast_rest_scan/*    # same for dast_rest_scan
+    - group1/dast/*              # skips group domains AND all projects under dast
+    - group1/dast_rest_scan/*    # same for dast_rest_scan
 
 projects:
   exclude:
-    - fxpayments/OBSOLETE-*          # skip specific projects by name (no group exclusion needed)
+    - group1/OBSOLETE-*          # skip specific projects by name (no group exclusion needed)
 ```
 
 `groups.exclude` patterns apply to both group domains and project enumeration — excluding a group automatically excludes all its projects. Use `projects.exclude` only for project-specific patterns that don't map to a group exclusion.
@@ -260,9 +260,9 @@ projects:
 
 | Pattern | What it matches |
 |---|---|
-| `fxpayments/dast` | Exact path only |
-| `fxpayments/dast_*` | Single-level glob — direct children matching the pattern |
-| `fxpayments/dast/*` | Deep glob — all descendants at any depth below `fxpayments/dast` |
+| `group1/dast` | Exact path only |
+| `group1/dast_*` | Single-level glob — direct children matching the pattern |
+| `group1/dast/*` | Deep glob — all descendants at any depth below `group1/dast` |
 
 **Limit how deep into subgroups to enumerate projects:**
 
@@ -278,23 +278,23 @@ projects:
 | `1` | Projects in the top group + projects one subgroup deep |
 | `2` | All of the above + one more subgroup level |
 
-Example with `max_depth: 1` under group `fxpayments`:
+Example with `max_depth: 1` under group `group1`:
 ```
-fxpayments/fx-posting-soap            ✓  depth 0
-fxpayments/dast/project-a             ✓  depth 1
-fxpayments/dast/rest_scan/project-b   ✗  depth 2 — excluded
+group1/fx-posting-soap            ✓  depth 0
+group1/dast/project-a             ✓  depth 1
+group1/dast/rest_scan/project-b   ✗  depth 2 — excluded
 ```
 
 **Target a specific group at runtime (overrides config):**
 
 ```bash
-./gitlab-copy all -config config.yaml -group fxpayments
+./gitlab-copy all -config config.yaml -group group1
 ```
 
 **Target a single project at runtime:**
 
 ```bash
-./gitlab-copy projects all -config config.yaml -project fxpayments/fx-posting-soap
+./gitlab-copy projects all -config config.yaml -project group1/fx-posting-soap
 ```
 
 **Run only group-level domains (no projects):**
@@ -304,7 +304,7 @@ fxpayments/dast/rest_scan/project-b   ✗  depth 2 — excluded
 ./gitlab-copy groups all -config config.yaml
 
 # Or override the group at runtime:
-./gitlab-copy groups all -config config.yaml -group fxpayments
+./gitlab-copy groups all -config config.yaml -group group1
 ```
 
 With `include_subgroups: true` in config, this runs group domains for the top-level group **and all subgroups** — you only need to specify the top-level group path.
@@ -316,7 +316,7 @@ With `include_subgroups: true` in config, this runs group domains for the top-le
 ./gitlab-copy projects all -config config.yaml
 
 # Or override the group at runtime:
-./gitlab-copy projects all -config config.yaml -group fxpayments
+./gitlab-copy projects all -config config.yaml -group group1
 ```
 
 ---
@@ -360,7 +360,7 @@ With `include_subgroups: true` in config, this runs group domains for the top-le
 
 > **Note on `-group` and `-project` flags:** These are optional overrides. If your config already has `groups.include` set, you don't need `-group` — just run with `-config`. Use `-group` when you want to target a different group than what's in the config without editing the file, or when your config has no group listed.
 >
-> **Subgroups and `-group`:** When you pass `-group fxpayments`, it sets `fxpayments` as the target group. With `include_subgroups: true` in config, all subgroups under `fxpayments` (e.g. `fxpayments/dast`, `fxpayments/operations`, and any deeper descendants) are enumerated and processed automatically. You do not need to list subgroups separately.
+> **Subgroups and `-group`:** When you pass `-group group1`, it sets `group1` as the target group. With `include_subgroups: true` in config, all subgroups under `group1` (e.g. `group1/dast`, `group1/operations`, and any deeper descendants) are enumerated and processed automatically. You do not need to list subgroups separately.
 
 ---
 
