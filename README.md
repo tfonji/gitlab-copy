@@ -137,8 +137,8 @@ The group already exists on dest with correct settings from Batch 1. Only copy p
 Useful for re-running a specific project after a fix, or for one-off migrations:
 
 ```bash
-./gitlab-copy projects all -config config.yaml -project group1/fx-posting-soap -dry-run
-./gitlab-copy projects all -config config.yaml -project group1/fx-posting-soap
+./gitlab-copy projects all -config config.yaml -project group1/green-apple -dry-run
+./gitlab-copy projects all -config config.yaml -project group1/green-apple
 ```
 
 No group needs to be specified in the config for single-project runs.
@@ -218,105 +218,173 @@ output:
 
 ## Controlling What Gets Copied
 
-There are two independent controls:
+There are two independent controls: **domains** (what settings to copy) and **scope** (which groups and projects to target). Understanding how they interact is key to running the tool correctly.
+
+---
 
 ### 1. Domains — which settings categories to copy
 
-The `domains` section in config.yaml is the primary control. **Comment out any domain you want to skip entirely.**
-
-Example — skip Jira integration for all projects in this run:
+The `domains` section in config.yaml controls which setting categories run. Comment out any domain to skip it entirely for that run.
 
 ```yaml
 domains:
+  groups:
+    - push_rules
+    - mr_settings
+    # - jira_integration   ← commented out, skipped for all groups
   projects:
     - topics
     - environments
-    # - jira_integration   ← commented out, won't run
-    - pipeline_triggers
+    # - pipeline_triggers  ← commented out, skipped for all projects
 ```
 
-Domains run in the order listed. For compliance, `compliance_frameworks` must appear before `compliance_assignments`.
+Domains run in the order listed. For compliance, `compliance_frameworks` must always appear before `compliance_assignments`.
+
+---
 
 ### 2. Scope — which groups and projects to target
 
-Control scope through a combination of config and CLI flags.
+Scope is controlled by the `groups` and `projects` sections in config.yaml. These are **two independent controls** that work differently.
 
-**Exclude specific subgroups and their projects:**
+#### The `groups` section
+
+Controls which groups get **group-level domains** applied (push_rules, mr_settings, compliance_frameworks, etc.).
 
 ```yaml
 groups:
+  include:
+    - group1             # top-level group to start from
   exclude:
-    - group1/dast/*              # skips group domains AND all projects under dast
-    - group1/dast_rest_scan/*    # same for dast_rest_scan
-
-projects:
-  exclude:
-    - group1/OBSOLETE-*          # skip specific projects by name (no group exclusion needed)
+    - group1/dast/*      # skip this subgroup's group domains AND its projects
+  include_subgroups: true    # also apply group domains to all subgroups
 ```
 
-`groups.exclude` patterns apply to both group domains and project enumeration — excluding a group automatically excludes all its projects. Use `projects.exclude` only for project-specific patterns that don't map to a group exclusion.
+- `include` — the top-level group(s) to process. Usually just one per migration batch.
+- `exclude` — subgroups to skip entirely. Excluding a group also automatically excludes all its projects from project processing.
+- `include_subgroups` — whether group domains run on subgroups too, not just the top-level group.
+    - `true` → push_rules, mr_settings etc. apply to `group1` **and** `group1/ops` **and** `group1/dast` etc.
+    - `false` → only `group1` gets group domains applied. Subgroups are skipped.
 
-**Exclusion pattern syntax:**
+#### The `projects` section
+
+Controls which projects get **project-level domains** applied (topics, environments, pipeline_triggers, etc.).
+
+```yaml
+projects:
+  include: []                # leave empty — projects are derived from groups.include
+  exclude:
+    - group1/OBSOLETE-*  # skip specific projects regardless of their group
+  include_subgroups: true    # include projects inside subgroups
+  max_depth: 0               # how deep into the hierarchy to go (0 = unlimited)
+```
+
+- `include` — leave empty to derive projects from `groups.include`. Only set this if you want to list projects explicitly without using a group.
+- `exclude` — skip specific projects from project domain processing. The group they belong to is still processed normally.
+- `include_subgroups` — whether projects inside subgroups are included.
+    - `true` → projects at any depth under the group are included
+    - `false` → only projects directly in the top-level group are included
+- `max_depth` — limits how deep into the subgroup hierarchy to go when collecting projects (only relevant when `include_subgroups: true`).
+
+#### How `groups.exclude` and `projects.exclude` differ
+
+| | `groups.exclude` | `projects.exclude` |
+|---|---|---|
+| Skips group domains | ✓ | ✗ |
+| Skips project domains | ✓ (automatically) | ✓ |
+| Affects the group itself | ✓ | ✗ |
+| Use when | Excluding an entire subgroup and everything in it | Excluding specific projects while keeping their group |
+
+**Rule of thumb:** If you want to exclude a subgroup and all its projects, use `groups.exclude`. If you only want to exclude specific projects but still configure their parent group, use `projects.exclude`.
+
+#### Exclusion pattern syntax
 
 | Pattern | What it matches |
 |---|---|
-| `group1/dast` | Exact path only |
+| `group1/dast` | Exact path only — that one group or project |
 | `group1/dast_*` | Single-level glob — direct children matching the pattern |
-| `group1/dast/*` | Deep glob — all descendants at any depth below `group1/dast` |
+| `group1/dast/*` | Deep glob — all descendants at any depth under `group1/dast` |
 
-**Limit how deep into subgroups to enumerate projects:**
+---
+
+### 3. `include_subgroups` — the switch that confuses most people
+
+There are two separate `include_subgroups` flags and they control different things:
+
+| Flag | Controls |
+|---|---|
+| `groups.include_subgroups` | Whether group domains run on subgroups |
+| `projects.include_subgroups` | Whether projects inside subgroups are collected for project domains |
+
+You can mix them independently:
+
+| `groups.include_subgroups` | `projects.include_subgroups` | Result |
+|---|---|---|
+| `true` | `true` | Group domains on all subgroups + all their projects processed |
+| `true` | `false` | Group domains on all subgroups + only top-level projects processed |
+| `false` | `true` | Group domains on top group only + all subgroup projects processed |
+| `false` | `false` | Group domains on top group only + only top-level projects processed |
+
+---
+
+### 4. `max_depth` — limiting project depth
+
+`max_depth` only applies to project enumeration and only works when `projects.include_subgroups: true`. Depth is measured relative to your top-level group.
+
+```
+group1/                          ← the top group (not a depth level)
+  project-a                          ← depth 0
+  project-b                          ← depth 0
+  ops/                               ← subgroup
+    project-c                        ← depth 1
+    platform/                        ← subgroup
+      project-d                      ← depth 2
+```
+
+| `max_depth` | Projects included |
+|---|---|
+| `0` (default) | All projects at any depth — unlimited |
+| `1` | depth 0 + depth 1 (project-a, b, c) |
+| `2` | depth 0 + depth 1 + depth 2 (project-a through d) |
+
+Example config for top group + one level of subgroups only:
 
 ```yaml
 projects:
   include_subgroups: true
-  max_depth: 1              # top group + direct subgroup projects only
+  max_depth: 1
 ```
 
-| Value | Projects included |
-|---|---|
-| `0` (default) | All projects at any depth — unlimited |
-| `1` | Projects in the top group + projects one subgroup deep |
-| `2` | All of the above + one more subgroup level |
+---
 
-Example with `max_depth: 1` under group `group1`:
-```
-group1/fx-posting-soap            ✓  depth 0
-group1/dast/project-a             ✓  depth 1
-group1/dast/rest_scan/project-b   ✗  depth 2 — excluded
-```
+### 5. Putting it all together — a real example
 
-**Target a specific group at runtime (overrides config):**
+```yaml
+groups:
+  include:
+    - group1
+  exclude:
+    - group1/dast/*          # skip dast entirely — no group domains, no projects
+  include_subgroups: true         # run group domains on all other subgroups
 
-```bash
-./gitlab-copy all -config config.yaml -group group1
-```
-
-**Target a single project at runtime:**
-
-```bash
-./gitlab-copy projects all -config config.yaml -project group1/fx-posting-soap
+projects:
+  exclude:
+    - group1/OBSOLETE-repo   # skip this one project but still process its group
+  include_subgroups: true
+  max_depth: 2                    # go two levels deep but not further
 ```
 
-**Run only group-level domains (no projects):**
+What this does:
 
-```bash
-# Group already in config:
-./gitlab-copy groups all -config config.yaml
-
-# Or override the group at runtime:
-./gitlab-copy groups all -config config.yaml -group group1
 ```
-
-With `include_subgroups: true` in config, this runs group domains for the top-level group **and all subgroups** — you only need to specify the top-level group path.
-
-**Run only project-level domains (no group settings):**
-
-```bash
-# Group already in config:
-./gitlab-copy projects all -config config.yaml
-
-# Or override the group at runtime:
-./gitlab-copy projects all -config config.yaml -group group1
+group1                              → group domains ✓
+group1/ops                          → group domains ✓
+group1/dast                         → group domains ✗  (groups.exclude)
+group1/project-a                    → project domains ✓  depth 0
+group1/ops/project-b                → project domains ✓  depth 1
+group1/ops/platform/project-c       → project domains ✓  depth 2
+group1/ops/platform/deep/project-d  → project domains ✗  depth 3, exceeds max_depth
+group1/dast/project-e              → project domains ✗  excluded via groups.exclude
+group1/OBSOLETE-repo               → project domains ✗  excluded via projects.exclude
 ```
 
 ---
