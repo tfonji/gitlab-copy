@@ -306,7 +306,7 @@ projects:
 
 ---
 
-### 3. `include_subgroups` — the switch that confuses most people
+### 3. `include_subgroups` — the switch that may be confusing
 
 There are two separate `include_subgroups` flags and they control different things:
 
