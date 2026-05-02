@@ -104,7 +104,6 @@ func LoadWithOverrides(path, groupOverride, projectOverride string) (*Config, er
 
 	var cfg Config
 	dec := yaml.NewDecoder(f)
-	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
