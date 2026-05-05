@@ -190,8 +190,6 @@ domains:
     - approval_rules
     - jira_integration
     - badges
-    - compliance_frameworks
-    - compliance_assignments
   projects:
     - topics
     - environments
@@ -238,7 +236,7 @@ domains:
     # - pipeline_triggers  ← commented out, skipped for all projects
 ```
 
-Domains run in the order listed. For compliance, `compliance_frameworks` must always appear before `compliance_assignments`.
+Domains run in the order listed.
 
 ---
 
@@ -248,7 +246,7 @@ Scope is controlled by the `groups` and `projects` sections in config.yaml. Thes
 
 #### The `groups` section
 
-Controls which groups get **group-level domains** applied (push_rules, mr_settings, compliance_frameworks, etc.).
+Controls which groups get **group-level domains** applied (push_rules, mr_settings, etc.).
 
 ```yaml
 groups:
@@ -633,8 +631,6 @@ Red shows the current dest value. Green shows the source value that will be appl
 | `approval_rules` | MR approval rule names and required approver counts | Approvers must be assigned manually after copy |
 | `jira_integration` | Jira integration configuration | Credentials are masked in source API — verify password/token on dest manually |
 | `badges` | Group-level badges inherited by all projects in the group | Badge URLs may reference source instance — verify after copy |
-| `compliance_frameworks` | Compliance framework definitions (name, description, color, pipeline config path) | Pipeline config path must exist on dest |
-| `compliance_assignments` | Which projects have which compliance frameworks assigned | Must run after `compliance_frameworks` |
 | `security_policy_project` | Links the security policy project to the group | The policy project must already exist on dest (migrated by Congregate) with the same full path |
 | `enforce_security_policy` | Deletes any compliance frameworks on dest root group, then links the configured policy project | Root groups only — set `security.policy_project` in config. Subgroups are skipped. |
 | `deploy_tokens` | Group deploy tokens — name, username, scopes, expiry preserved | New token value generated on dest — surfaced in report |

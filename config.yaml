@@ -60,8 +60,6 @@ domains:
     - approval_rules                  # MR approval rule names and required counts (approvers need manual assignment)
     - jira_integration                # Jira integration config (credentials require manual verification on dest)
     - badges                          # group-level badges (inherited by all projects in the group)
-    - compliance_frameworks           # compliance framework definitions (name, description, color, pipeline config)
-    - compliance_assignments          # which projects have which frameworks assigned (run after compliance_frameworks)
     - security_policy_project         # links the security policy project to the group — requires the policy project to exist on dest first
     - deploy_tokens                   # group deploy tokens (new token value generated on dest — surfaced in report)
     - access_tokens                   # group access tokens — same name, scopes and access level copied, new token value surfaced in report
