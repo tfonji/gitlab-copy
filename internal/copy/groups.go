@@ -10,14 +10,15 @@ import (
 )
 
 type GroupCopier struct {
-	src     *gitlab.Client
-	dst     *gitlab.Client
-	domains []string
-	dryRun  bool
+	src           *gitlab.Client
+	dst           *gitlab.Client
+	domains       []string
+	dryRun        bool
+	policyProject string // dest security policy project path (for enforce_security_policy domain)
 }
 
-func NewGroupCopier(src, dst *gitlab.Client, domains []string, dryRun bool) *GroupCopier {
-	return &GroupCopier{src: src, dst: dst, domains: domains, dryRun: dryRun}
+func NewGroupCopier(src, dst *gitlab.Client, domains []string, dryRun bool, policyProject string) *GroupCopier {
+	return &GroupCopier{src: src, dst: dst, domains: domains, dryRun: dryRun, policyProject: policyProject}
 }
 
 func (c *GroupCopier) Copy(groupPath string) []internal.DomainCopyResult {
@@ -56,6 +57,8 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copyComplianceAssignments(groupPath)
 	case "security_policy_project":
 		return c.copySecurityPolicyProject(groupPath)
+	case "enforce_security_policy":
+		return c.enforceSecurityPolicy(groupPath)
 	case "deploy_tokens":
 		return c.copyGroupDeployTokens(groupPath)
 	case "access_tokens":
@@ -1211,6 +1214,110 @@ func (c *GroupCopier) copyGroupAccessTokens(groupPath string) internal.DomainCop
 				Error:  fmt.Errorf("new token generated — update any services referencing the source token"),
 			})
 		}
+	}
+
+	return result
+}
+
+// --- enforce_security_policy ---
+
+// enforceSecurityPolicy runs only on root groups (parent_id == nil).
+// It deletes any compliance frameworks on dest, then links the configured
+// policy project to the group. The policy project path comes from
+// config.security.policy_project.
+func (c *GroupCopier) enforceSecurityPolicy(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "enforce_security_policy"}
+
+	if c.policyProject == "" {
+		result.Items = []internal.ItemResult{{
+			Key:    groupPath,
+			Action: internal.ActionSkipped,
+			Error:  fmt.Errorf("security.policy_project not set in config — skipping"),
+		}}
+		return result
+	}
+
+	// Only run on root groups
+	dstGroup, err := c.dst.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest group: %w", err)
+		return result
+	}
+	if dstGroup.ParentID != nil {
+		result.Items = []internal.ItemResult{{
+			Key:    groupPath,
+			Action: internal.ActionSkipped,
+			DryRun: c.dryRun,
+		}}
+		return result
+	}
+
+	// Step 1 — delete any compliance frameworks on dest
+	frameworks, err := c.dst.GetGroupComplianceFrameworks(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest compliance frameworks: %w", err)
+		return result
+	}
+
+	for _, fw := range frameworks {
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    fmt.Sprintf("delete framework: %s", fw.Name),
+				Action: internal.ActionCreated, // represents "would delete"
+				DryRun: true,
+			})
+			continue
+		}
+		if err := c.dst.DeleteComplianceFramework(fw.ID); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    fmt.Sprintf("delete framework: %s", fw.Name),
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    fmt.Sprintf("deleted framework: %s", fw.Name),
+				Action: internal.ActionCreated,
+			})
+		}
+	}
+
+	// Step 2 — link the policy project
+	existing, err := c.dst.GetGroupSecurityPolicyProject(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest security policy project: %w", err)
+		return result
+	}
+
+	if existing != nil && existing.FullPath == c.policyProject {
+		result.Items = append(result.Items, internal.ItemResult{
+			Key:    c.policyProject,
+			Action: internal.ActionSkipped,
+			DryRun: c.dryRun,
+		})
+		return result
+	}
+
+	if c.dryRun {
+		result.Items = append(result.Items, internal.ItemResult{
+			Key:    c.policyProject,
+			Action: internal.ActionCreated,
+			DryRun: true,
+		})
+		return result
+	}
+
+	if err := c.dst.LinkSecurityPolicyProject(groupPath, c.policyProject); err != nil {
+		result.Items = append(result.Items, internal.ItemResult{
+			Key:    c.policyProject,
+			Action: internal.ActionFailed,
+			Error:  err,
+		})
+	} else {
+		result.Items = append(result.Items, internal.ItemResult{
+			Key:    c.policyProject,
+			Action: internal.ActionCreated,
+		})
 	}
 
 	return result

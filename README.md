@@ -114,10 +114,10 @@ The group has never been migrated. Run `all` to copy both group-level settings a
 
 ```bash
 # Dry-run
-./gitlab-copy all -config config.yaml -group group1 -dry-run
+./gitlab-copy all -config config.yaml -group fxpayments -dry-run
 
 # Apply
-./gitlab-copy all -config config.yaml -group group1
+./gitlab-copy all -config config.yaml -group fxpayments
 ```
 
 ### Batch 2+ — Existing group (additional APPID batches)
@@ -126,10 +126,10 @@ The group already exists on dest with correct settings from Batch 1. Only copy p
 
 ```bash
 # Dry-run
-./gitlab-copy projects all -config config.yaml -group group1 -dry-run
+./gitlab-copy projects all -config config.yaml -group fxpayments -dry-run
 
 # Apply
-./gitlab-copy projects all -config config.yaml -group group1
+./gitlab-copy projects all -config config.yaml -group fxpayments
 ```
 
 ### Single project
@@ -137,8 +137,8 @@ The group already exists on dest with correct settings from Batch 1. Only copy p
 Useful for re-running a specific project after a fix, or for one-off migrations:
 
 ```bash
-./gitlab-copy projects all -config config.yaml -project group1/green-apple -dry-run
-./gitlab-copy projects all -config config.yaml -project group1/green-apple
+./gitlab-copy projects all -config config.yaml -project fxpayments/fx-posting-soap -dry-run
+./gitlab-copy projects all -config config.yaml -project fxpayments/fx-posting-soap
 ```
 
 No group needs to be specified in the config for single-project runs.
@@ -160,16 +160,16 @@ destination:
 
 groups:
   include:
-    - group1                      # group path(s) to process
+    - fxpayments                      # group path(s) to process
   exclude:
-    - group1/dast/*               # exclude all descendants of group1/dast
-    - group1/dast_rest_scan/*
+    - fxpayments/dast/*               # exclude all descendants of fxpayments/dast
+    - fxpayments/dast_rest_scan/*
   include_subgroups: true
 
 projects:
   include: []                         # leave empty to derive from groups above
   exclude:
-    - group1/OBSOLETE-*           # exclude by name pattern
+    - fxpayments/OBSOLETE-*           # exclude by name pattern
   include_subgroups: true
   include_archived: false
   max_depth: 0                        # 0 = unlimited, 1 = top group + direct subgroups only, 2 = one level deeper
@@ -253,17 +253,17 @@ Controls which groups get **group-level domains** applied (push_rules, mr_settin
 ```yaml
 groups:
   include:
-    - group1             # top-level group to start from
+    - fxpayments             # top-level group to start from
   exclude:
-    - group1/dast/*      # skip this subgroup's group domains AND its projects
+    - fxpayments/dast/*      # skip this subgroup's group domains AND its projects
   include_subgroups: true    # also apply group domains to all subgroups
 ```
 
 - `include` — the top-level group(s) to process. Usually just one per migration batch.
 - `exclude` — subgroups to skip entirely. Excluding a group also automatically excludes all its projects from project processing.
 - `include_subgroups` — whether group domains run on subgroups too, not just the top-level group.
-    - `true` → push_rules, mr_settings etc. apply to `group1` **and** `group1/ops` **and** `group1/dast` etc.
-    - `false` → only `group1` gets group domains applied. Subgroups are skipped.
+  - `true` → push_rules, mr_settings etc. apply to `fxpayments` **and** `fxpayments/ops` **and** `fxpayments/dast` etc.
+  - `false` → only `fxpayments` gets group domains applied. Subgroups are skipped.
 
 #### The `projects` section
 
@@ -273,7 +273,7 @@ Controls which projects get **project-level domains** applied (topics, environme
 projects:
   include: []                # leave empty — projects are derived from groups.include
   exclude:
-    - group1/OBSOLETE-*  # skip specific projects regardless of their group
+    - fxpayments/OBSOLETE-*  # skip specific projects regardless of their group
   include_subgroups: true    # include projects inside subgroups
   max_depth: 0               # how deep into the hierarchy to go (0 = unlimited)
 ```
@@ -281,8 +281,8 @@ projects:
 - `include` — leave empty to derive projects from `groups.include`. Only set this if you want to list projects explicitly without using a group.
 - `exclude` — skip specific projects from project domain processing. The group they belong to is still processed normally.
 - `include_subgroups` — whether projects inside subgroups are included.
-    - `true` → projects at any depth under the group are included
-    - `false` → only projects directly in the top-level group are included
+  - `true` → projects at any depth under the group are included
+  - `false` → only projects directly in the top-level group are included
 - `max_depth` — limits how deep into the subgroup hierarchy to go when collecting projects (only relevant when `include_subgroups: true`).
 
 #### How `groups.exclude` and `projects.exclude` differ
@@ -300,13 +300,13 @@ projects:
 
 | Pattern | What it matches |
 |---|---|
-| `group1/dast` | Exact path only — that one group or project |
-| `group1/dast_*` | Single-level glob — direct children matching the pattern |
-| `group1/dast/*` | Deep glob — all descendants at any depth under `group1/dast` |
+| `fxpayments/dast` | Exact path only — that one group or project |
+| `fxpayments/dast_*` | Single-level glob — direct children matching the pattern |
+| `fxpayments/dast/*` | Deep glob — all descendants at any depth under `fxpayments/dast` |
 
 ---
 
-### 3. `include_subgroups` — the switch that may be confusing
+### 3. `include_subgroups` — the switch that confuses most people
 
 There are two separate `include_subgroups` flags and they control different things:
 
@@ -331,7 +331,7 @@ You can mix them independently:
 `max_depth` only applies to project enumeration and only works when `projects.include_subgroups: true`. Depth is measured relative to your top-level group.
 
 ```
-group1/                          ← the top group (not a depth level)
+fxpayments/                          ← the top group (not a depth level)
   project-a                          ← depth 0
   project-b                          ← depth 0
   ops/                               ← subgroup
@@ -361,14 +361,14 @@ projects:
 ```yaml
 groups:
   include:
-    - group1
+    - fxpayments
   exclude:
-    - group1/dast/*          # skip dast entirely — no group domains, no projects
+    - fxpayments/dast/*          # skip dast entirely — no group domains, no projects
   include_subgroups: true         # run group domains on all other subgroups
 
 projects:
   exclude:
-    - group1/OBSOLETE-repo   # skip this one project but still process its group
+    - fxpayments/OBSOLETE-repo   # skip this one project but still process its group
   include_subgroups: true
   max_depth: 2                    # go two levels deep but not further
 ```
@@ -376,15 +376,15 @@ projects:
 What this does:
 
 ```
-group1                              → group domains ✓
-group1/ops                          → group domains ✓
-group1/dast                         → group domains ✗  (groups.exclude)
-group1/project-a                    → project domains ✓  depth 0
-group1/ops/project-b                → project domains ✓  depth 1
-group1/ops/platform/project-c       → project domains ✓  depth 2
-group1/ops/platform/deep/project-d  → project domains ✗  depth 3, exceeds max_depth
-group1/dast/project-e              → project domains ✗  excluded via groups.exclude
-group1/OBSOLETE-repo               → project domains ✗  excluded via projects.exclude
+fxpayments                              → group domains ✓
+fxpayments/ops                          → group domains ✓
+fxpayments/dast                         → group domains ✗  (groups.exclude)
+fxpayments/project-a                    → project domains ✓  depth 0
+fxpayments/ops/project-b                → project domains ✓  depth 1
+fxpayments/ops/platform/project-c       → project domains ✓  depth 2
+fxpayments/ops/platform/deep/project-d  → project domains ✗  depth 3, exceeds max_depth
+fxpayments/dast/project-e              → project domains ✗  excluded via groups.exclude
+fxpayments/OBSOLETE-repo               → project domains ✗  excluded via projects.exclude
 ```
 
 ---
@@ -428,7 +428,7 @@ group1/OBSOLETE-repo               → project domains ✗  excluded via project
 
 > **Note on `-group` and `-project` flags:** These are optional overrides. If your config already has `groups.include` set, you don't need `-group` — just run with `-config`. Use `-group` when you want to target a different group than what's in the config without editing the file, or when your config has no group listed.
 >
-> **Subgroups and `-group`:** When you pass `-group group1`, it sets `group1` as the target group. With `include_subgroups: true` in config, all subgroups under `group1` (e.g. `group1/dast`, `group1/operations`, and any deeper descendants) are enumerated and processed automatically. You do not need to list subgroups separately.
+> **Subgroups and `-group`:** When you pass `-group fxpayments`, it sets `fxpayments` as the target group. With `include_subgroups: true` in config, all subgroups under `fxpayments` (e.g. `fxpayments/dast`, `fxpayments/operations`, and any deeper descendants) are enumerated and processed automatically. You do not need to list subgroups separately.
 
 ---
 
@@ -636,6 +636,7 @@ Red shows the current dest value. Green shows the source value that will be appl
 | `compliance_frameworks` | Compliance framework definitions (name, description, color, pipeline config path) | Pipeline config path must exist on dest |
 | `compliance_assignments` | Which projects have which compliance frameworks assigned | Must run after `compliance_frameworks` |
 | `security_policy_project` | Links the security policy project to the group | The policy project must already exist on dest (migrated by Congregate) with the same full path |
+| `enforce_security_policy` | Deletes any compliance frameworks on dest root group, then links the configured policy project | Root groups only — set `security.policy_project` in config. Subgroups are skipped. |
 | `deploy_tokens` | Group deploy tokens — name, username, scopes, expiry preserved | New token value generated on dest — surfaced in report |
 | `access_tokens` | Group access tokens — name, scopes, access level, expiry preserved | New token value generated on dest — surfaced in report |
 

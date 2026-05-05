@@ -182,7 +182,7 @@ func run(scope string, dryRun bool, cfg *config.Config, src, dst *gitlab.Client)
 	result := &internal.RunResult{DryRun: dryRun}
 
 	if runGroups {
-		groupCopier := copy.NewGroupCopier(src, dst, cfg.Domains.Groups, dryRun)
+		groupCopier := copy.NewGroupCopier(src, dst, cfg.Domains.Groups, dryRun, cfg.Security.PolicyProject)
 
 		groups, err := copy.EnumerateGroups(cfg, src)
 		if err != nil {

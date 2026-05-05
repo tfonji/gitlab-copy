@@ -207,7 +207,34 @@ func (c *Client) CreateComplianceFramework(groupPath string, f ComplianceFramewo
 	return data.CreateComplianceFramework.Framework.ID, nil
 }
 
-// --- Write assignments (GraphQL mutation) ---
+// --- Delete framework (GraphQL mutation) ---
+
+type destroyFrameworkData struct {
+	DestroyComplianceFramework struct {
+		Errors []string `json:"errors"`
+	} `json:"destroyComplianceFramework"`
+}
+
+const destroyComplianceFrameworkMutation = `
+mutation($id: ComplianceManagementFrameworkID!) {
+  destroyComplianceFramework(input: { id: $id }) {
+    errors
+  }
+}`
+
+func (c *Client) DeleteComplianceFramework(frameworkID string) error {
+	var data destroyFrameworkData
+	err := c.graphql(destroyComplianceFrameworkMutation, map[string]any{
+		"id": frameworkID,
+	}, &data)
+	if err != nil {
+		return err
+	}
+	if len(data.DestroyComplianceFramework.Errors) > 0 {
+		return fmt.Errorf("destroyComplianceFramework: %s", data.DestroyComplianceFramework.Errors[0])
+	}
+	return nil
+}
 
 type assignFrameworkData struct {
 	AssignComplianceFramework struct {

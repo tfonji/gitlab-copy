@@ -41,6 +41,10 @@ type ConcurrencyConfig struct {
 	Projects int `yaml:"projects"`
 }
 
+type SecurityConfig struct {
+	PolicyProject string `yaml:"policy_project"` // dest policy project path to link to all root groups
+}
+
 type Config struct {
 	Source      Instance          `yaml:"source"`
 	Destination Instance          `yaml:"destination"`
@@ -49,6 +53,7 @@ type Config struct {
 	Domains     DomainsConfig     `yaml:"domains"`
 	Concurrency ConcurrencyConfig `yaml:"concurrency"`
 	Output      OutputConfig      `yaml:"output"`
+	Security    SecurityConfig    `yaml:"security"`
 }
 
 // Tier 1 defaults — well-defined REST, clean natural keys.

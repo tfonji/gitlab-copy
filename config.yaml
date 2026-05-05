@@ -98,3 +98,10 @@ output:
     - terminal                        # colored output during the run
     - html                            # tabbed HTML report with collapsible cards
     - json                            # machine-readable output for pipeline integration
+# Security policy enforcement (optional)
+# If set, the enforce_security_policy domain will:
+#   1. Delete any compliance frameworks on dest root groups
+#   2. Link this policy project to all dest root groups
+# Only runs on root groups (no parent). Subgroups are skipped.
+security:
+  policy_project: ""   # e.g. dso-adoption/security-policy-project
