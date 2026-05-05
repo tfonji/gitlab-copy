@@ -12,6 +12,7 @@ import (
 	"gitlab-copy/internal/copy"
 	"gitlab-copy/internal/gitlab"
 	"gitlab-copy/internal/report"
+	"gitlab-copy/internal/resolve"
 )
 
 const usage = `gitlab-copy — copy GitLab settings from source to destination instance
@@ -57,6 +58,30 @@ func main() {
 	var flagArgs []string
 
 	switch first {
+	case "resolve":
+		// resolve reads APP_IDS env var, searches source for matching projects,
+		// and updates config.yaml with explicit groups and projects lists.
+		fs := flag.NewFlagSet("gitlab-copy resolve", flag.ExitOnError)
+		configPath := fs.String("config", "config.yaml", "path to config file")
+		noColor := fs.Bool("no-color", false, "disable color output")
+		_ = noColor
+		if err := fs.Parse(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "error parsing flags: %v\n", err)
+			os.Exit(1)
+		}
+		cfg, err := config.Load(*configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
+			os.Exit(1)
+		}
+		srcClient := gitlab.NewClient(cfg.Source.URL, cfg.Source.Token())
+		dstClient := gitlab.NewClient(cfg.Destination.URL, cfg.Destination.Token())
+		if err := resolve.Run(*configPath, srcClient, dstClient, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "resolve error: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+
 	case "groups", "projects":
 		if len(os.Args) < 3 {
 			fmt.Fprintf(os.Stderr, "usage: gitlab-copy %s <all> [flags]\n", first)

@@ -88,6 +88,7 @@ var DefaultProjectDomains = []string{
 	"pipeline_schedules",
 }
 
+// Load loads a config file with no CLI overrides.
 func Load(path string) (*Config, error) {
 	return LoadWithOverrides(path, "", "")
 }
