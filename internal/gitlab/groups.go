@@ -14,6 +14,7 @@ type Group struct {
 	FullPath    string  `json:"full_path"`
 	FullName    string  `json:"full_name"`
 	WebURL      string  `json:"web_url"`
+	ParentID    *int    `json:"parent_id"`
 
 	LFSEnabled                            bool    `json:"lfs_enabled"`
 	RequestAccessEnabled                  bool    `json:"request_access_enabled"`
