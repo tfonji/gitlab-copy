@@ -288,7 +288,7 @@ func commitAndPush(configPath string, appIDs []string, w io.Writer) error {
 		branch = "main"
 	}
 
-	commitMsg := fmt.Sprintf("chore: resolve config for APPID(s) %s [skip ci]", strings.Join(appIDs, ", "))
+	commitMsg := fmt.Sprintf("chore: resolve config for APPID(s) %s", strings.Join(appIDs, ", "))
 
 	cmds := [][]string{
 		{"git", "config", "user.email", "gitlab-ci@migration"},
