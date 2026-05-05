@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"gitlab-copy/internal/config"
 	"gitlab-copy/internal/gitlab"
 
 	"gopkg.in/yaml.v3"
@@ -98,19 +97,8 @@ func Run(configPath string, srcClient, dstClient *gitlab.Client, w io.Writer) er
 		fmt.Fprintln(w, strings.Join(groupsSkipped, ", "))
 	}
 
-	// --- Load and update config ---
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
-	}
-
-	cfg.Groups.Include = groupsToAdd
-	cfg.Groups.IncludeSubgroups = false
-	cfg.Projects.Include = projects
-	cfg.Projects.IncludeSubgroups = false
-
-	// --- Write updated config ---
-	if err := writeConfig(configPath, cfg); err != nil {
+	// --- Write updated config (groups and projects sections only) ---
+	if err := writeConfig(configPath, groupsToAdd, projects); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 	fmt.Fprintf(w, "\nUpdated %s\n", configPath)
@@ -165,16 +153,113 @@ func sortedKeys(m map[string]bool) []string {
 	return keys
 }
 
-func writeConfig(path string, cfg *config.Config) error {
-	f, err := os.Create(path)
+func writeConfig(path string, groupsInclude []string, projectsInclude []string) error {
+	// Read the raw file as a YAML node tree so we preserve all other
+	// fields, comments, and ordering — only groups and projects are touched.
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("reading config: %w", err)
 	}
-	defer f.Close()
 
-	enc := yaml.NewEncoder(f)
-	enc.SetIndent(2)
-	return enc.Encode(cfg)
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("parsing config: %w", err)
+	}
+
+	// The root is a document node; the actual mapping is root.Content[0]
+	if len(root.Content) == 0 {
+		return fmt.Errorf("empty config file")
+	}
+	doc := root.Content[0]
+
+	// Update groups and projects sections
+	updateSection(doc, "groups", map[string]any{
+		"include":           groupsInclude,
+		"include_subgroups": false,
+	})
+	updateSection(doc, "projects", map[string]any{
+		"include":           projectsInclude,
+		"include_subgroups": false,
+	})
+
+	out, err := yaml.Marshal(&root)
+	if err != nil {
+		return fmt.Errorf("marshalling config: %w", err)
+	}
+
+	return os.WriteFile(path, out, 0644)
+}
+
+// updateSection finds a mapping key in a YAML mapping node and updates
+// only the specified sub-keys, leaving all other sub-keys untouched.
+func updateSection(mapping *yaml.Node, section string, updates map[string]any) {
+	// Find the section key in the top-level mapping
+	for i := 0; i < len(mapping.Content)-1; i += 2 {
+		keyNode := mapping.Content[i]
+		valNode := mapping.Content[i+1]
+		if keyNode.Value != section {
+			continue
+		}
+		if valNode.Kind != yaml.MappingNode {
+			continue
+		}
+		// Update each key within the section
+		for updateKey, updateVal := range updates {
+			setMappingValue(valNode, updateKey, updateVal)
+		}
+		return
+	}
+
+	// Section not found — append it
+	keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: section}
+	valNode := &yaml.Node{Kind: yaml.MappingNode}
+	for updateKey, updateVal := range updates {
+		setMappingValue(valNode, updateKey, updateVal)
+	}
+	mapping.Content = append(mapping.Content, keyNode, valNode)
+}
+
+// setMappingValue sets or replaces a key in a YAML mapping node.
+func setMappingValue(mapping *yaml.Node, key string, val any) {
+	newVal := toYAMLNode(val)
+
+	for i := 0; i < len(mapping.Content)-1; i += 2 {
+		if mapping.Content[i].Value == key {
+			mapping.Content[i+1] = newVal
+			return
+		}
+	}
+	// Key not found — append
+	mapping.Content = append(mapping.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Value: key},
+		newVal,
+	)
+}
+
+// toYAMLNode converts a Go value to a yaml.Node.
+func toYAMLNode(val any) *yaml.Node {
+	switch v := val.(type) {
+	case bool:
+		s := "false"
+		if v {
+			s = "true"
+		}
+		return &yaml.Node{Kind: yaml.ScalarNode, Value: s, Tag: "!!bool"}
+	case []string:
+		seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		for _, s := range v {
+			seq.Content = append(seq.Content, &yaml.Node{
+				Kind:  yaml.ScalarNode,
+				Value: s,
+				Tag:   "!!str",
+			})
+		}
+		return seq
+	default:
+		node := &yaml.Node{}
+		_ = node.Encode(val)
+		return node
+	}
 }
 
 func commitAndPush(configPath string, appIDs []string, w io.Writer) error {
