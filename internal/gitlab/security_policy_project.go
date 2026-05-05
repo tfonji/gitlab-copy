@@ -74,15 +74,15 @@ query($fullPath: ID!) {
 		} `json:"securityPolicyProjectAssign"`
 	}
 	const mutation = `
-mutation($namespacePath: ID!, $securityPolicyProjectID: ProjectID!) {
-  securityPolicyProjectAssign(input: { namespacePath: $namespacePath, securityPolicyProjectID: $securityPolicyProjectID }) {
+mutation($namespacePath: ID!, $securityPolicyProjectId: ProjectID!) {
+  securityPolicyProjectAssign(input: { namespacePath: $namespacePath, securityPolicyProjectId: $securityPolicyProjectId }) {
     errors
   }
 }`
 	var data assignData
 	err := c.graphql(mutation, map[string]any{
 		"namespacePath":           groupPath,
-		"securityPolicyProjectID": pd.Project.ID,
+		"securityPolicyProjectId": pd.Project.ID,
 	}, &data)
 	if err != nil {
 		return err
