@@ -74,7 +74,7 @@ query($fullPath: ID!) {
 		} `json:"securityPolicyProjectAssign"`
 	}
 	const mutation = `
-mutation($fullPath: ID!, $securityPolicyProjectId: ProjectID!) {
+mutation($fullPath: String!, $securityPolicyProjectId: ProjectID!) {
   securityPolicyProjectAssign(input: { fullPath: $fullPath, securityPolicyProjectId: $securityPolicyProjectId }) {
     errors
   }
