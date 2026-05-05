@@ -1,5 +1,7 @@
 package gitlab
 
+import "fmt"
+
 // SecurityPolicyProjectLink holds the path of the security policy project
 // linked to a group.
 type SecurityPolicyProjectLink struct {
@@ -42,10 +44,32 @@ func (c *Client) GetGroupSecurityPolicyProject(groupPath string) (*SecurityPolic
 
 // --- Write (REST) ---
 
-// LinkSecurityPolicyProject links a security policy project to a group.
-// The project must already exist on the dest instance.
+// LinkSecurityPolicyProject links a security policy project to a group
+// using the securityPolicyProjectAssign GraphQL mutation.
 func (c *Client) LinkSecurityPolicyProject(groupPath string, projectFullPath string) error {
-	return c.post("/groups/"+encodePath(groupPath)+"/security/policy_project", map[string]string{
-		"full_path": projectFullPath,
-	}, nil)
+	type assignData struct {
+		SecurityPolicyProjectAssign struct {
+			Errors []string `json:"errors"`
+		} `json:"securityPolicyProjectAssign"`
+	}
+
+	const mutation = `
+mutation($fullPath: ID!, $projectPath: ID!) {
+  securityPolicyProjectAssign(input: { namespacePath: $fullPath, fullPath: $projectPath }) {
+    errors
+  }
+}`
+
+	var data assignData
+	err := c.graphql(mutation, map[string]any{
+		"fullPath":    groupPath,
+		"projectPath": projectFullPath,
+	}, &data)
+	if err != nil {
+		return err
+	}
+	if len(data.SecurityPolicyProjectAssign.Errors) > 0 {
+		return fmt.Errorf("securityPolicyProjectAssign: %s", data.SecurityPolicyProjectAssign.Errors[0])
+	}
+	return nil
 }
