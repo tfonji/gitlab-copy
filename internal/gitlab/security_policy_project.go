@@ -47,23 +47,42 @@ func (c *Client) GetGroupSecurityPolicyProject(groupPath string) (*SecurityPolic
 // LinkSecurityPolicyProject links a security policy project to a group
 // using the securityPolicyProjectAssign GraphQL mutation.
 func (c *Client) LinkSecurityPolicyProject(groupPath string, projectFullPath string) error {
+	// Step 1 — resolve the project full path to its GraphQL GID
+	type projectData struct {
+		Project struct {
+			ID string `json:"id"`
+		} `json:"project"`
+	}
+	const projectQuery = `
+query($fullPath: ID!) {
+  project(fullPath: $fullPath) {
+    id
+  }
+}`
+	var pd projectData
+	if err := c.graphql(projectQuery, map[string]any{"fullPath": projectFullPath}, &pd); err != nil {
+		return fmt.Errorf("resolving policy project ID: %w", err)
+	}
+	if pd.Project.ID == "" {
+		return fmt.Errorf("policy project %q not found", projectFullPath)
+	}
+
+	// Step 2 — assign using the GID
 	type assignData struct {
 		SecurityPolicyProjectAssign struct {
 			Errors []string `json:"errors"`
 		} `json:"securityPolicyProjectAssign"`
 	}
-
 	const mutation = `
-mutation($fullPath: ID!, $projectPath: ID!) {
-  securityPolicyProjectAssign(input: { namespacePath: $fullPath, fullPath: $projectPath }) {
+mutation($namespacePath: ID!, $securityPolicyProjectID: ProjectID!) {
+  securityPolicyProjectAssign(input: { namespacePath: $namespacePath, securityPolicyProjectID: $securityPolicyProjectID }) {
     errors
   }
 }`
-
 	var data assignData
 	err := c.graphql(mutation, map[string]any{
-		"fullPath":    groupPath,
-		"projectPath": projectFullPath,
+		"namespacePath":           groupPath,
+		"securityPolicyProjectID": pd.Project.ID,
 	}, &data)
 	if err != nil {
 		return err
