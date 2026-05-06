@@ -215,6 +215,13 @@ type destroyFrameworkData struct {
 	} `json:"destroyComplianceFramework"`
 }
 
+const unsetDefaultFrameworkMutation = `
+mutation($id: ComplianceManagementFrameworkID!) {
+  updateComplianceFramework(input: { id: $id, params: { default: false } }) {
+    errors
+  }
+}`
+
 const destroyComplianceFrameworkMutation = `
 mutation($id: ComplianceManagementFrameworkID!) {
   destroyComplianceFramework(input: { id: $id }) {
@@ -222,12 +229,24 @@ mutation($id: ComplianceManagementFrameworkID!) {
   }
 }`
 
-func (c *Client) DeleteComplianceFramework(frameworkID string) error {
+func (c *Client) DeleteComplianceFramework(frameworkID string, isDefault bool) error {
+	// Default frameworks cannot be deleted directly — must unset default first
+	if isDefault {
+		var unsetData struct {
+			UpdateComplianceFramework struct {
+				Errors []string `json:"errors"`
+			} `json:"updateComplianceFramework"`
+		}
+		if err := c.graphql(unsetDefaultFrameworkMutation, map[string]any{"id": frameworkID}, &unsetData); err != nil {
+			return fmt.Errorf("unsetting default on framework: %w", err)
+		}
+		if len(unsetData.UpdateComplianceFramework.Errors) > 0 {
+			return fmt.Errorf("unsetting default on framework: %s", unsetData.UpdateComplianceFramework.Errors[0])
+		}
+	}
+
 	var data destroyFrameworkData
-	err := c.graphql(destroyComplianceFrameworkMutation, map[string]any{
-		"id": frameworkID,
-	}, &data)
-	if err != nil {
+	if err := c.graphql(destroyComplianceFrameworkMutation, map[string]any{"id": frameworkID}, &data); err != nil {
 		return err
 	}
 	if len(data.DestroyComplianceFramework.Errors) > 0 {

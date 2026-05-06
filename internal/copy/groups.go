@@ -1268,7 +1268,7 @@ func (c *GroupCopier) enforceSecurityPolicy(groupPath string) internal.DomainCop
 			})
 			continue
 		}
-		if err := c.dst.DeleteComplianceFramework(fw.ID); err != nil {
+		if err := c.dst.DeleteComplianceFramework(fw.ID, fw.Default); err != nil {
 			result.Items = append(result.Items, internal.ItemResult{
 				Key:    fmt.Sprintf("delete framework: %s", fw.Name),
 				Action: internal.ActionFailed,
