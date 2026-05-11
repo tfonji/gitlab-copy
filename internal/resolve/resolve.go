@@ -172,15 +172,21 @@ func writeConfig(path string, groupsInclude []string, projectsInclude []string) 
 	}
 	doc := root.Content[0]
 
-	// Update groups and projects sections
-	updateSection(doc, "groups", map[string]any{
-		"include":           groupsInclude,
-		"include_subgroups": false,
-	})
+	// Always update projects.include with the resolved project list
 	updateSection(doc, "projects", map[string]any{
 		"include":           projectsInclude,
 		"include_subgroups": false,
 	})
+
+	// Only update groups.include if there are groups that need settings copied.
+	// If all groups already exist on dest, leave the groups section untouched
+	// to avoid setting an empty include list which would fail validation.
+	if len(groupsInclude) > 0 {
+		updateSection(doc, "groups", map[string]any{
+			"include":           groupsInclude,
+			"include_subgroups": false,
+		})
+	}
 
 	out, err := yaml.Marshal(&root)
 	if err != nil {
