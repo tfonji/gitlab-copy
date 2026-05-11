@@ -90,6 +90,7 @@ var DefaultProjectDomains = []string{
 	"deploy_tokens",
 	"access_tokens",
 	"pipeline_schedules",
+	"job_token_scope",
 }
 
 // Load loads a config file with no CLI overrides.

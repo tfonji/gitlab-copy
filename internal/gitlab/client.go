@@ -167,6 +167,10 @@ func (c *Client) put(path string, body any, v any) error {
 	return c.doWrite(http.MethodPut, path, body, v)
 }
 
+func (c *Client) patch(path string, body any) error {
+	return c.doWrite(http.MethodPatch, path, body, nil)
+}
+
 func (c *Client) delete(path string) error {
 	return c.doWrite(http.MethodDelete, path, nil, nil)
 }

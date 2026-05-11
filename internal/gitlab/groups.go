@@ -6,6 +6,7 @@ import (
 )
 
 type Group struct {
+	ID          int     `json:"id"`
 	Name        string  `json:"name"`
 	Path        string  `json:"path"`
 	Description string  `json:"description"`

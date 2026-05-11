@@ -60,6 +60,8 @@ func (c *ProjectCopier) copyDomain(projectPath, domain string) internal.DomainCo
 		return c.copyProjectAccessTokens(projectPath)
 	case "pipeline_schedules":
 		return c.copyPipelineSchedules(projectPath)
+	case "job_token_scope":
+		return c.copyJobTokenScope(projectPath)
 	default:
 		return internal.DomainCopyResult{
 			Domain: domain,
@@ -1339,4 +1341,218 @@ func hasUserGroupTagAccessLevels(t gitlab.ProtectedTag) bool {
 		}
 	}
 	return false
+}
+
+// --- job_token_scope ---
+
+func (c *ProjectCopier) copyJobTokenScope(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "job_token_scope"}
+
+	// Fetch source and dest project IDs
+	srcProject, err := c.src.GetProject(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source project: %w", err)
+		return result
+	}
+	dstProject, err := c.dst.GetProject(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest project: %w", err)
+		return result
+	}
+
+	// --- Layer 1: inbound_enabled toggle ---
+	srcScope, err := c.src.GetJobTokenScope(srcProject.ID)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source job token scope: %w", err)
+		return result
+	}
+	if srcScope == nil {
+		return result
+	}
+
+	dstScope, err := c.dst.GetJobTokenScope(dstProject.ID)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest job token scope: %w", err)
+		return result
+	}
+
+	diffs := []internal.DiffLine{
+		{
+			Field: "inbound_enabled",
+			Src:   fmt.Sprintf("%v", srcScope.InboundEnabled),
+			Dst: fmt.Sprintf("%v", func() bool {
+				if dstScope != nil {
+					return dstScope.InboundEnabled
+				}
+				return false
+			}()),
+			Match: dstScope != nil && srcScope.InboundEnabled == dstScope.InboundEnabled,
+		},
+	}
+
+	scopeChanged := dstScope == nil || srcScope.InboundEnabled != dstScope.InboundEnabled
+	if scopeChanged {
+		if !c.dryRun {
+			if err := c.dst.SetJobTokenScope(dstProject.ID, srcScope.InboundEnabled); err != nil {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    "inbound_enabled",
+					Action: internal.ActionFailed,
+					Error:  err,
+				})
+			} else {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    "inbound_enabled",
+					Action: internal.ActionUpdated,
+					Diffs:  diffs,
+					DryRun: c.dryRun,
+				})
+			}
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "inbound_enabled",
+				Action: internal.ActionUpdated,
+				Diffs:  diffs,
+				DryRun: true,
+			})
+		}
+	} else {
+		result.Items = append(result.Items, internal.ItemResult{
+			Key:    "inbound_enabled",
+			Action: internal.ActionSkipped,
+			Diffs:  diffs,
+			DryRun: c.dryRun,
+		})
+	}
+
+	// --- Layer 2: project allowlist ---
+	srcProjects, err := c.src.GetJobTokenAllowlist(srcProject.ID)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source project allowlist: %w", err)
+		return result
+	}
+
+	dstProjects, err := c.dst.GetJobTokenAllowlist(dstProject.ID)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest project allowlist: %w", err)
+		return result
+	}
+
+	// Build dest allowlist set by path
+	dstProjectPaths := make(map[string]bool)
+	for _, p := range dstProjects {
+		dstProjectPaths[p.PathWithNamespace] = true
+	}
+
+	for _, sp := range srcProjects {
+		// Skip the project itself — always in its own allowlist by default
+		if sp.PathWithNamespace == projectPath {
+			continue
+		}
+
+		if dstProjectPaths[sp.PathWithNamespace] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "project: " + sp.PathWithNamespace,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "project: " + sp.PathWithNamespace,
+				Action: internal.ActionCreated,
+				DryRun: true,
+			})
+			continue
+		}
+
+		// Look up the project on dest to get its numeric ID
+		dstTargetProject, err := c.dst.GetProject(sp.PathWithNamespace)
+		if err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "project: " + sp.PathWithNamespace,
+				Action: internal.ActionFailed,
+				Error:  fmt.Errorf("project not found on dest: %w", err),
+			})
+			continue
+		}
+
+		if err := c.dst.AddJobTokenAllowlistProject(dstProject.ID, dstTargetProject.ID); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "project: " + sp.PathWithNamespace,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "project: " + sp.PathWithNamespace,
+				Action: internal.ActionCreated,
+			})
+		}
+	}
+
+	// --- Layer 3: group allowlist ---
+	srcGroups, err := c.src.GetJobTokenGroupsAllowlist(srcProject.ID)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source groups allowlist: %w", err)
+		return result
+	}
+
+	dstGroups, err := c.dst.GetJobTokenGroupsAllowlist(dstProject.ID)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest groups allowlist: %w", err)
+		return result
+	}
+
+	dstGroupPaths := make(map[string]bool)
+	for _, g := range dstGroups {
+		dstGroupPaths[g.FullPath] = true
+	}
+
+	for _, sg := range srcGroups {
+		if dstGroupPaths[sg.FullPath] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "group: " + sg.FullPath,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "group: " + sg.FullPath,
+				Action: internal.ActionCreated,
+				DryRun: true,
+			})
+			continue
+		}
+
+		// Look up the group on dest to get its numeric ID
+		dstTargetGroup, err := c.dst.GetGroup(sg.FullPath)
+		if err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "group: " + sg.FullPath,
+				Action: internal.ActionFailed,
+				Error:  fmt.Errorf("group not found on dest: %w", err),
+			})
+			continue
+		}
+
+		if err := c.dst.AddJobTokenAllowlistGroup(dstProject.ID, dstTargetGroup.ID); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "group: " + sg.FullPath,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "group: " + sg.FullPath,
+				Action: internal.ActionCreated,
+			})
+		}
+	}
+
+	return result
 }
