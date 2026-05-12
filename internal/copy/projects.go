@@ -1507,13 +1507,28 @@ func (c *ProjectCopier) copyJobTokenScope(projectPath string) internal.DomainCop
 
 	dstGroupPaths := make(map[string]bool)
 	for _, g := range dstGroups {
-		dstGroupPaths[g.FullPath] = true
+		dstGroupDetails, err := c.dst.GetGroup(fmt.Sprintf("%d", g.ID))
+		if err == nil && dstGroupDetails != nil {
+			dstGroupPaths[dstGroupDetails.FullPath] = true
+		}
 	}
 
 	for _, sg := range srcGroups {
-		if dstGroupPaths[sg.FullPath] {
+		// The allowlist API only returns id/name — look up full_path via source
+		srcGroupDetails, err := c.src.GetGroup(fmt.Sprintf("%d", sg.ID))
+		if err != nil {
 			result.Items = append(result.Items, internal.ItemResult{
-				Key:    "group: " + sg.FullPath,
+				Key:    fmt.Sprintf("group: (id %d)", sg.ID),
+				Action: internal.ActionFailed,
+				Error:  fmt.Errorf("fetching source group details: %w", err),
+			})
+			continue
+		}
+		groupPath := srcGroupDetails.FullPath
+
+		if dstGroupPaths[groupPath] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    "group: " + groupPath,
 				Action: internal.ActionSkipped,
 				DryRun: c.dryRun,
 			})
@@ -1522,18 +1537,17 @@ func (c *ProjectCopier) copyJobTokenScope(projectPath string) internal.DomainCop
 
 		if c.dryRun {
 			result.Items = append(result.Items, internal.ItemResult{
-				Key:    "group: " + sg.FullPath,
+				Key:    "group: " + groupPath,
 				Action: internal.ActionCreated,
 				DryRun: true,
 			})
 			continue
 		}
 
-		// Look up the group on dest to get its numeric ID
-		dstTargetGroup, err := c.dst.GetGroup(sg.FullPath)
+		dstTargetGroup, err := c.dst.GetGroup(groupPath)
 		if err != nil {
 			result.Items = append(result.Items, internal.ItemResult{
-				Key:    "group: " + sg.FullPath,
+				Key:    "group: " + groupPath,
 				Action: internal.ActionFailed,
 				Error:  fmt.Errorf("group not found on dest: %w", err),
 			})
@@ -1542,13 +1556,13 @@ func (c *ProjectCopier) copyJobTokenScope(projectPath string) internal.DomainCop
 
 		if err := c.dst.AddJobTokenAllowlistGroup(dstProject.ID, dstTargetGroup.ID); err != nil {
 			result.Items = append(result.Items, internal.ItemResult{
-				Key:    "group: " + sg.FullPath,
+				Key:    "group: " + groupPath,
 				Action: internal.ActionFailed,
 				Error:  err,
 			})
 		} else {
 			result.Items = append(result.Items, internal.ItemResult{
-				Key:    "group: " + sg.FullPath,
+				Key:    "group: " + groupPath,
 				Action: internal.ActionCreated,
 			})
 		}
