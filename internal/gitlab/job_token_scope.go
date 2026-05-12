@@ -7,7 +7,8 @@ import (
 
 // JobTokenScope holds the job token access settings for a project.
 type JobTokenScope struct {
-	InboundEnabled bool `json:"inbound_enabled"`
+	InboundEnabled                     bool `json:"inbound_enabled"`
+	CiPushRepositoryForJobTokenAllowed bool `json:"ci_push_repository_for_job_token_allowed"`
 }
 
 // JobTokenAllowlistProject is a project in the job token allowlist.
@@ -25,6 +26,7 @@ type JobTokenAllowlistGroup struct {
 // --- Read ---
 
 func (c *Client) GetJobTokenScope(projectID int) (*JobTokenScope, error) {
+	// inbound_enabled lives on the job_token_scope endpoint
 	var scope JobTokenScope
 	if err := c.get(fmt.Sprintf("/projects/%d/job_token_scope", projectID), nil, &scope); err != nil {
 		if apiErr, ok := err.(*APIError); ok && (apiErr.IsNotFound() || apiErr.IsForbidden()) {
@@ -32,6 +34,15 @@ func (c *Client) GetJobTokenScope(projectID int) (*JobTokenScope, error) {
 		}
 		return nil, err
 	}
+
+	// ci_push_repository_for_job_token_allowed lives on the project endpoint
+	var proj struct {
+		CiPushRepositoryForJobTokenAllowed bool `json:"ci_push_repository_for_job_token_allowed"`
+	}
+	if err := c.get(fmt.Sprintf("/projects/%d", projectID), nil, &proj); err == nil {
+		scope.CiPushRepositoryForJobTokenAllowed = proj.CiPushRepositoryForJobTokenAllowed
+	}
+
 	return &scope, nil
 }
 
@@ -95,6 +106,13 @@ func (c *Client) SetJobTokenScope(projectID int, enabled bool) error {
 	return c.patch(fmt.Sprintf("/projects/%d/job_token_scope", projectID), map[string]bool{
 		"enabled": enabled,
 	})
+}
+
+// SetJobTokenPushPermission sets ci_push_repository_for_job_token_allowed via the projects API.
+func (c *Client) SetJobTokenPushPermission(projectID int, allowed bool) error {
+	return c.put(fmt.Sprintf("/projects/%d", projectID), map[string]bool{
+		"ci_push_repository_for_job_token_allowed": allowed,
+	}, nil)
 }
 
 // AddJobTokenAllowlistProject adds a project to the job token allowlist by dest project ID.

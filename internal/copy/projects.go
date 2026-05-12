@@ -1388,28 +1388,47 @@ func (c *ProjectCopier) copyJobTokenScope(projectPath string) internal.DomainCop
 			}()),
 			Match: dstScope != nil && srcScope.InboundEnabled == dstScope.InboundEnabled,
 		},
+		{
+			Field: "ci_push_repository_for_job_token_allowed",
+			Src:   fmt.Sprintf("%v", srcScope.CiPushRepositoryForJobTokenAllowed),
+			Dst: fmt.Sprintf("%v", func() bool {
+				if dstScope != nil {
+					return dstScope.CiPushRepositoryForJobTokenAllowed
+				}
+				return false
+			}()),
+			Match: dstScope != nil && srcScope.CiPushRepositoryForJobTokenAllowed == dstScope.CiPushRepositoryForJobTokenAllowed,
+		},
 	}
 
 	scopeChanged := dstScope == nil || srcScope.InboundEnabled != dstScope.InboundEnabled
-	if scopeChanged {
+	pushChanged := dstScope == nil || srcScope.CiPushRepositoryForJobTokenAllowed != dstScope.CiPushRepositoryForJobTokenAllowed
+
+	if scopeChanged || pushChanged {
 		if !c.dryRun {
-			if err := c.dst.SetJobTokenScope(dstProject.ID, srcScope.InboundEnabled); err != nil {
+			var applyErr error
+			if scopeChanged {
+				applyErr = c.dst.SetJobTokenScope(dstProject.ID, srcScope.InboundEnabled)
+			}
+			if applyErr == nil && pushChanged {
+				applyErr = c.dst.SetJobTokenPushPermission(dstProject.ID, srcScope.CiPushRepositoryForJobTokenAllowed)
+			}
+			if applyErr != nil {
 				result.Items = append(result.Items, internal.ItemResult{
-					Key:    "inbound_enabled",
+					Key:    "job_token_permissions",
 					Action: internal.ActionFailed,
-					Error:  err,
+					Error:  applyErr,
 				})
 			} else {
 				result.Items = append(result.Items, internal.ItemResult{
-					Key:    "inbound_enabled",
+					Key:    "job_token_permissions",
 					Action: internal.ActionUpdated,
 					Diffs:  diffs,
-					DryRun: c.dryRun,
 				})
 			}
 		} else {
 			result.Items = append(result.Items, internal.ItemResult{
-				Key:    "inbound_enabled",
+				Key:    "job_token_permissions",
 				Action: internal.ActionUpdated,
 				Diffs:  diffs,
 				DryRun: true,
@@ -1417,7 +1436,7 @@ func (c *ProjectCopier) copyJobTokenScope(projectPath string) internal.DomainCop
 		}
 	} else {
 		result.Items = append(result.Items, internal.ItemResult{
-			Key:    "inbound_enabled",
+			Key:    "job_token_permissions",
 			Action: internal.ActionSkipped,
 			Diffs:  diffs,
 			DryRun: c.dryRun,
