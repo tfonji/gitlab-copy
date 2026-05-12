@@ -172,21 +172,17 @@ func writeConfig(path string, groupsInclude []string, projectsInclude []string) 
 	}
 	doc := root.Content[0]
 
-	// Always update projects.include with the resolved project list
+	// Always update both sections to ensure config is in a clean known state.
+	// Leftover values from a previous batch would cause unintended processing.
+	// Empty slice = empty list in YAML, which is valid and intentional.
+	updateSection(doc, "groups", map[string]any{
+		"include":           groupsInclude,
+		"include_subgroups": false,
+	})
 	updateSection(doc, "projects", map[string]any{
 		"include":           projectsInclude,
 		"include_subgroups": false,
 	})
-
-	// Only update groups.include if there are groups that need settings copied.
-	// If all groups already exist on dest, leave the groups section untouched
-	// to avoid setting an empty include list which would fail validation.
-	if len(groupsInclude) > 0 {
-		updateSection(doc, "groups", map[string]any{
-			"include":           groupsInclude,
-			"include_subgroups": false,
-		})
-	}
 
 	out, err := yaml.Marshal(&root)
 	if err != nil {
