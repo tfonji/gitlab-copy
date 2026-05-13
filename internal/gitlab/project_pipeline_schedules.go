@@ -64,6 +64,11 @@ func (c *Client) GetPipelineScheduleVariables(projectPath string, scheduleID int
 
 // --- Write ---
 
+func (c *Client) UpdateProjectPipelineSchedule(projectPath string, scheduleID int, req PipelineScheduleRequest) error {
+	path := fmt.Sprintf("/projects/%s/pipeline_schedules/%d", encodePath(projectPath), scheduleID)
+	return c.put(path, req, nil)
+}
+
 func (c *Client) CreateProjectPipelineSchedule(projectPath string, req PipelineScheduleRequest) (int, error) {
 	var resp PipelineSchedule
 	if err := c.post("/projects/"+encodePath(projectPath)+"/pipeline_schedules", req, &resp); err != nil {

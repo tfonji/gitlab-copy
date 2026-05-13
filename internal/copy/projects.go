@@ -1177,9 +1177,9 @@ func (c *ProjectCopier) copyPipelineSchedules(projectPath string) internal.Domai
 		cron        string
 		ref         string
 	}
-	dstByKey := make(map[scheduleKey]bool)
+	dstByKey := make(map[scheduleKey]gitlab.PipelineSchedule)
 	for _, s := range dstSchedules {
-		dstByKey[scheduleKey{s.Description, s.Cron, s.Ref}] = true
+		dstByKey[scheduleKey{s.Description, s.Cron, s.Ref}] = s
 	}
 
 	sort.Slice(srcSchedules, func(i, j int) bool {
@@ -1189,12 +1189,61 @@ func (c *ProjectCopier) copyPipelineSchedules(projectPath string) internal.Domai
 	for _, sched := range srcSchedules {
 		key := scheduleKey{sched.Description, sched.Cron, sched.Ref}
 
-		if dstByKey[key] {
-			result.Items = append(result.Items, internal.ItemResult{
-				Key:    sched.Description,
-				Action: internal.ActionSkipped,
-				DryRun: c.dryRun,
-			})
+		if dst, exists := dstByKey[key]; exists {
+			// Key matches — check if mutable fields differ
+			diffs := []internal.DiffLine{
+				{Field: "active", Src: fmt.Sprintf("%v", sched.Active), Dst: fmt.Sprintf("%v", dst.Active), Match: sched.Active == dst.Active},
+				{Field: "cron_timezone", Src: sched.CronTimezone, Dst: dst.CronTimezone, Match: sched.CronTimezone == dst.CronTimezone},
+			}
+
+			needsUpdate := false
+			for _, d := range diffs {
+				if !d.Match {
+					needsUpdate = true
+					break
+				}
+			}
+
+			if !needsUpdate {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    sched.Description,
+					Action: internal.ActionSkipped,
+					Diffs:  diffs,
+					DryRun: c.dryRun,
+				})
+				continue
+			}
+
+			if c.dryRun {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    sched.Description,
+					Action: internal.ActionUpdated,
+					Diffs:  diffs,
+					DryRun: true,
+				})
+				continue
+			}
+
+			if err := c.dst.UpdateProjectPipelineSchedule(projectPath, dst.ID, gitlab.PipelineScheduleRequest{
+				Description:  sched.Description,
+				Ref:          sched.Ref,
+				Cron:         sched.Cron,
+				CronTimezone: sched.CronTimezone,
+				Active:       sched.Active,
+			}); err != nil {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    sched.Description,
+					Action: internal.ActionFailed,
+					Error:  err,
+					Diffs:  diffs,
+				})
+			} else {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    sched.Description,
+					Action: internal.ActionUpdated,
+					Diffs:  diffs,
+				})
+			}
 			continue
 		}
 
