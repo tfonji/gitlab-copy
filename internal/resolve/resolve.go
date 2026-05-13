@@ -97,8 +97,19 @@ func Run(configPath string, srcClient, dstClient *gitlab.Client, w io.Writer) er
 		fmt.Fprintln(w, strings.Join(groupsSkipped, ", "))
 	}
 
-	// --- Write updated config (groups and projects sections only) ---
-	if err := writeConfig(configPath, groupsToAdd, projects); err != nil {
+	// --- Build domains.groups based on pipeline flags ---
+	enforceSecurityPolicy := strings.EqualFold(os.Getenv("ENFORCE_SECURITY_POLICY"), "yes")
+	copyCompliance := strings.EqualFold(os.Getenv("COPY_COMPLIANCE_FRAMEWORKS"), "yes")
+
+	groupDomains := buildGroupDomains(enforceSecurityPolicy, copyCompliance)
+
+	fmt.Fprintf(w, "\nDomain flags:\n")
+	fmt.Fprintf(w, "  ENFORCE_SECURITY_POLICY:    %v\n", enforceSecurityPolicy)
+	fmt.Fprintf(w, "  COPY_COMPLIANCE_FRAMEWORKS: %v\n", copyCompliance)
+	fmt.Fprintf(w, "  domains.groups will be set to: %s\n", strings.Join(groupDomains, ", "))
+
+	// --- Write updated config (groups, projects, and domains sections) ---
+	if err := writeConfig(configPath, groupsToAdd, projects, groupDomains); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 	fmt.Fprintf(w, "\nUpdated %s\n", configPath)
@@ -153,7 +164,38 @@ func sortedKeys(m map[string]bool) []string {
 	return keys
 }
 
-func writeConfig(path string, groupsInclude []string, projectsInclude []string) error {
+// buildGroupDomains returns the groups domain list based on pipeline flags.
+// compliance_frameworks, compliance_assignments, and enforce_security_policy
+// are opt-in — excluded by default.
+func buildGroupDomains(enforceSecurityPolicy, copyCompliance bool) []string {
+	base := []string{
+		"push_rules",
+		"description",
+		"default_branch_name",
+		"default_branch_protection",
+		"mr_settings",
+		"mr_approval_settings",
+		"protected_environments",
+		"approval_rules",
+		"jira_integration",
+		"badges",
+		"security_policy_project",
+		"deploy_tokens",
+		"access_tokens",
+	}
+
+	if copyCompliance {
+		// Insert before security_policy_project — must run before enforce_security_policy
+		base = append(base, "compliance_frameworks", "compliance_assignments")
+	}
+	if enforceSecurityPolicy {
+		base = append(base, "enforce_security_policy")
+	}
+
+	return base
+}
+
+func writeConfig(path string, groupsInclude []string, projectsInclude []string, groupDomains []string) error {
 	// Read the raw file as a YAML node tree so we preserve all other
 	// fields, comments, and ordering — only groups and projects are touched.
 	data, err := os.ReadFile(path)
@@ -184,12 +226,38 @@ func writeConfig(path string, groupsInclude []string, projectsInclude []string) 
 		"include_subgroups": false,
 	})
 
+	// Update domains.groups to reflect the pipeline flag selections
+	updateNestedSection(doc, "domains", "groups", groupDomains)
+
 	out, err := yaml.Marshal(&root)
 	if err != nil {
 		return fmt.Errorf("marshalling config: %w", err)
 	}
 
 	return os.WriteFile(path, out, 0644)
+}
+
+// updateNestedSection finds a top-level key, then updates a sub-key within it.
+// e.g. updateNestedSection(doc, "domains", "groups", [...]) sets domains.groups.
+func updateNestedSection(mapping *yaml.Node, section, key string, val any) {
+	for i := 0; i < len(mapping.Content)-1; i += 2 {
+		if mapping.Content[i].Value != section {
+			continue
+		}
+		valNode := mapping.Content[i+1]
+		if valNode.Kind != yaml.MappingNode {
+			continue
+		}
+		setMappingValue(valNode, key, val)
+		return
+	}
+	// Section not found — append it
+	sectionNode := &yaml.Node{Kind: yaml.MappingNode}
+	setMappingValue(sectionNode, key, val)
+	mapping.Content = append(mapping.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Value: section},
+		sectionNode,
+	)
 }
 
 // updateSection finds a mapping key in a YAML mapping node and updates
