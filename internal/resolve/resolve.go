@@ -100,12 +100,14 @@ func Run(configPath string, srcClient, dstClient *gitlab.Client, w io.Writer) er
 	// --- Build domains.groups based on pipeline flags ---
 	enforceSecurityPolicy := strings.EqualFold(os.Getenv("ENFORCE_SECURITY_POLICY"), "yes")
 	copyCompliance := strings.EqualFold(os.Getenv("COPY_COMPLIANCE_FRAMEWORKS"), "yes")
+	linkMRPolicy := !strings.EqualFold(os.Getenv("LINK_MERGE_REQUEST_POLICY"), "no") // default yes
 
-	groupDomains := buildGroupDomains(enforceSecurityPolicy, copyCompliance)
+	groupDomains := buildGroupDomains(enforceSecurityPolicy, copyCompliance, linkMRPolicy)
 
 	fmt.Fprintf(w, "\nDomain flags:\n")
-	fmt.Fprintf(w, "  ENFORCE_SECURITY_POLICY:    %v\n", enforceSecurityPolicy)
-	fmt.Fprintf(w, "  COPY_COMPLIANCE_FRAMEWORKS: %v\n", copyCompliance)
+	fmt.Fprintf(w, "  ENFORCE_SECURITY_POLICY:     %v\n", enforceSecurityPolicy)
+	fmt.Fprintf(w, "  COPY_COMPLIANCE_FRAMEWORKS:  %v\n", copyCompliance)
+	fmt.Fprintf(w, "  LINK_MERGE_REQUEST_POLICY:   %v\n", linkMRPolicy)
 	fmt.Fprintf(w, "  domains.groups will be set to: %s\n", strings.Join(groupDomains, ", "))
 
 	// --- Write updated config (groups, projects, and domains sections) ---
@@ -167,7 +169,7 @@ func sortedKeys(m map[string]bool) []string {
 // buildGroupDomains returns the groups domain list based on pipeline flags.
 // compliance_frameworks, compliance_assignments, and enforce_security_policy
 // are opt-in — excluded by default.
-func buildGroupDomains(enforceSecurityPolicy, copyCompliance bool) []string {
+func buildGroupDomains(enforceSecurityPolicy, copyCompliance, linkMRPolicy bool) []string {
 	base := []string{
 		"push_rules",
 		"description",
@@ -185,11 +187,13 @@ func buildGroupDomains(enforceSecurityPolicy, copyCompliance bool) []string {
 	}
 
 	if copyCompliance {
-		// Insert before security_policy_project — must run before enforce_security_policy
 		base = append(base, "compliance_frameworks", "compliance_assignments")
 	}
 	if enforceSecurityPolicy {
 		base = append(base, "enforce_security_policy")
+	}
+	if linkMRPolicy {
+		base = append(base, "link_merge_request_policy")
 	}
 
 	return base

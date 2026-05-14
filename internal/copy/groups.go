@@ -10,15 +10,23 @@ import (
 )
 
 type GroupCopier struct {
-	src           *gitlab.Client
-	dst           *gitlab.Client
-	domains       []string
-	dryRun        bool
-	policyProject string // dest security policy project path (for enforce_security_policy domain)
+	src             *gitlab.Client
+	dst             *gitlab.Client
+	domains         []string
+	dryRun          bool
+	policyProject   string // dest security policy project (enforce_security_policy)
+	mrPolicyProject string // dest MR policy project (link_merge_request_policy)
 }
 
-func NewGroupCopier(src, dst *gitlab.Client, domains []string, dryRun bool, policyProject string) *GroupCopier {
-	return &GroupCopier{src: src, dst: dst, domains: domains, dryRun: dryRun, policyProject: policyProject}
+func NewGroupCopier(src, dst *gitlab.Client, domains []string, dryRun bool, policyProject, mrPolicyProject string) *GroupCopier {
+	return &GroupCopier{
+		src:             src,
+		dst:             dst,
+		domains:         domains,
+		dryRun:          dryRun,
+		policyProject:   policyProject,
+		mrPolicyProject: mrPolicyProject,
+	}
 }
 
 func (c *GroupCopier) Copy(groupPath string) []internal.DomainCopyResult {
@@ -59,6 +67,8 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.copySecurityPolicyProject(groupPath)
 	case "enforce_security_policy":
 		return c.enforceSecurityPolicy(groupPath)
+	case "link_merge_request_policy":
+		return c.linkMergeRequestPolicy(groupPath)
 	case "deploy_tokens":
 		return c.copyGroupDeployTokens(groupPath)
 	case "access_tokens":
@@ -1318,6 +1328,78 @@ func (c *GroupCopier) enforceSecurityPolicy(groupPath string) internal.DomainCop
 			Key:    c.policyProject,
 			Action: internal.ActionCreated,
 		})
+	}
+
+	return result
+}
+
+// --- link_merge_request_policy ---
+
+// linkMergeRequestPolicy links the configured MR policy project to root groups.
+// Unlike enforce_security_policy, it does NOT delete compliance frameworks.
+func (c *GroupCopier) linkMergeRequestPolicy(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "link_merge_request_policy"}
+
+	if c.mrPolicyProject == "" {
+		result.Items = []internal.ItemResult{{
+			Key:    groupPath,
+			Action: internal.ActionSkipped,
+			Error:  fmt.Errorf("security.merge_request_policy_project not set in config — skipping"),
+		}}
+		return result
+	}
+
+	// Only run on root groups
+	dstGroup, err := c.dst.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest group: %w", err)
+		return result
+	}
+	if dstGroup.ParentID != nil {
+		result.Items = []internal.ItemResult{{
+			Key:    groupPath,
+			Action: internal.ActionSkipped,
+			DryRun: c.dryRun,
+		}}
+		return result
+	}
+
+	// Check if already linked to the same project
+	existing, err := c.dst.GetGroupSecurityPolicyProject(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest security policy project: %w", err)
+		return result
+	}
+
+	if existing != nil && existing.FullPath == c.mrPolicyProject {
+		result.Items = []internal.ItemResult{{
+			Key:    c.mrPolicyProject,
+			Action: internal.ActionSkipped,
+			DryRun: c.dryRun,
+		}}
+		return result
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{{
+			Key:    c.mrPolicyProject,
+			Action: internal.ActionCreated,
+			DryRun: true,
+		}}
+		return result
+	}
+
+	if err := c.dst.LinkSecurityPolicyProject(groupPath, c.mrPolicyProject); err != nil {
+		result.Items = []internal.ItemResult{{
+			Key:    c.mrPolicyProject,
+			Action: internal.ActionFailed,
+			Error:  err,
+		}}
+	} else {
+		result.Items = []internal.ItemResult{{
+			Key:    c.mrPolicyProject,
+			Action: internal.ActionCreated,
+		}}
 	}
 
 	return result

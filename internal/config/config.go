@@ -42,7 +42,8 @@ type ConcurrencyConfig struct {
 }
 
 type SecurityConfig struct {
-	PolicyProject string `yaml:"policy_project"` // dest policy project path to link to all root groups
+	PolicyProject             string `yaml:"policy_project"`               // used by enforce_security_policy
+	MergeRequestPolicyProject string `yaml:"merge_request_policy_project"` // used by link_merge_request_policy
 }
 
 type Config struct {
@@ -68,8 +69,11 @@ var DefaultGroupDomains = []string{
 	"approval_rules",
 	"jira_integration",
 	"badges",
+	"compliance_frameworks",
+	"compliance_assignments",
 	"security_policy_project",
 	"enforce_security_policy",
+	"link_merge_request_policy",
 	"deploy_tokens",
 	"access_tokens",
 }
