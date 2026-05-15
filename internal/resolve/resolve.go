@@ -24,9 +24,26 @@ type Result struct {
 // Run resolves APP_IDS to a concrete project and group list, updates
 // config.yaml in place, and commits+pushes if running in CI.
 func Run(configPath string, srcClient, dstClient *gitlab.Client, w io.Writer) error {
+	// --- Always update domain flags based on pipeline variables ---
+	enforceSecurityPolicy := strings.EqualFold(os.Getenv("ENFORCE_SECURITY_POLICY"), "yes")
+	copyCompliance := strings.EqualFold(os.Getenv("COPY_COMPLIANCE_FRAMEWORKS"), "yes")
+	linkMRPolicy := !strings.EqualFold(os.Getenv("LINK_MERGE_REQUEST_POLICY"), "no")
+
+	groupDomains := buildGroupDomains(enforceSecurityPolicy, copyCompliance, linkMRPolicy)
+
+	fmt.Fprintf(w, "Domain flags:\n")
+	fmt.Fprintf(w, "  ENFORCE_SECURITY_POLICY:     %v\n", enforceSecurityPolicy)
+	fmt.Fprintf(w, "  COPY_COMPLIANCE_FRAMEWORKS:  %v\n", copyCompliance)
+	fmt.Fprintf(w, "  LINK_MERGE_REQUEST_POLICY:   %v\n", linkMRPolicy)
+	fmt.Fprintf(w, "  domains.groups will be set to: %s\n", strings.Join(groupDomains, ", "))
+
 	appIDsRaw := os.Getenv("APP_IDS")
 	if strings.TrimSpace(appIDsRaw) == "" {
-		fmt.Fprintln(w, "APP_IDS not set or empty — skipping resolve, using existing config")
+		// No APP_IDS — skip project resolution but still update domain flags
+		fmt.Fprintln(w, "\nAPP_IDS not set or empty — skipping project resolve, updating domain flags only")
+		if err := updateDomainFlags(configPath, groupDomains); err != nil {
+			return fmt.Errorf("updating domain flags: %w", err)
+		}
 		return nil
 	}
 
@@ -97,19 +114,6 @@ func Run(configPath string, srcClient, dstClient *gitlab.Client, w io.Writer) er
 		fmt.Fprintln(w, strings.Join(groupsSkipped, ", "))
 	}
 
-	// --- Build domains.groups based on pipeline flags ---
-	enforceSecurityPolicy := strings.EqualFold(os.Getenv("ENFORCE_SECURITY_POLICY"), "yes")
-	copyCompliance := strings.EqualFold(os.Getenv("COPY_COMPLIANCE_FRAMEWORKS"), "yes")
-	linkMRPolicy := !strings.EqualFold(os.Getenv("LINK_MERGE_REQUEST_POLICY"), "no") // default yes
-
-	groupDomains := buildGroupDomains(enforceSecurityPolicy, copyCompliance, linkMRPolicy)
-
-	fmt.Fprintf(w, "\nDomain flags:\n")
-	fmt.Fprintf(w, "  ENFORCE_SECURITY_POLICY:     %v\n", enforceSecurityPolicy)
-	fmt.Fprintf(w, "  COPY_COMPLIANCE_FRAMEWORKS:  %v\n", copyCompliance)
-	fmt.Fprintf(w, "  LINK_MERGE_REQUEST_POLICY:   %v\n", linkMRPolicy)
-	fmt.Fprintf(w, "  domains.groups will be set to: %s\n", strings.Join(groupDomains, ", "))
-
 	// --- Write updated config (groups, projects, and domains sections) ---
 	if err := writeConfig(configPath, groupsToAdd, projects, groupDomains); err != nil {
 		return fmt.Errorf("writing config: %w", err)
@@ -164,6 +168,28 @@ func sortedKeys(m map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// updateDomainFlags updates only the domains.groups section in config.yaml,
+// leaving groups, projects, and all other sections untouched.
+func updateDomainFlags(path string, groupDomains []string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading config: %w", err)
+	}
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("parsing config: %w", err)
+	}
+	if len(root.Content) == 0 {
+		return fmt.Errorf("empty config file")
+	}
+	updateNestedSection(root.Content[0], "domains", "groups", groupDomains)
+	out, err := yaml.Marshal(&root)
+	if err != nil {
+		return fmt.Errorf("marshalling config: %w", err)
+	}
+	return os.WriteFile(path, out, 0644)
 }
 
 // buildGroupDomains returns the groups domain list based on pipeline flags.
