@@ -32,6 +32,8 @@ func (c *ProjectCopier) copyDomain(projectPath, domain string) internal.DomainCo
 	switch domain {
 	case "topics":
 		return c.copyTopics(projectPath)
+	case "project_settings":
+		return c.copyProjectSettings(projectPath)
 	case "environments":
 		return c.copyEnvironments(projectPath)
 	case "protected_environments":
@@ -68,6 +70,61 @@ func (c *ProjectCopier) copyDomain(projectPath, domain string) internal.DomainCo
 			Error:  fmt.Errorf("unknown domain %q", domain),
 		}
 	}
+}
+
+// --- project_settings ---
+
+func (c *ProjectCopier) copyProjectSettings(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "project_settings"}
+
+	src, err := c.src.GetProject(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source project: %w", err)
+		return result
+	}
+	dst, err := c.dst.GetProject(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest project: %w", err)
+		return result
+	}
+
+	diffs := []internal.DiffLine{
+		{Field: "description", Src: src.Description, Dst: dst.Description, Match: src.Description == dst.Description},
+		{Field: "auto_cancel_pending_pipelines", Src: src.AutoCancelPendingPipelines, Dst: dst.AutoCancelPendingPipelines, Match: src.AutoCancelPendingPipelines == dst.AutoCancelPendingPipelines},
+		{Field: "ci_forward_deployment_enabled", Src: fmt.Sprintf("%v", src.CIForwardDeploymentEnabled), Dst: fmt.Sprintf("%v", dst.CIForwardDeploymentEnabled), Match: fmt.Sprintf("%v", src.CIForwardDeploymentEnabled) == fmt.Sprintf("%v", dst.CIForwardDeploymentEnabled)},
+		{Field: "ci_separated_caches", Src: fmt.Sprintf("%v", src.CISeperateCache), Dst: fmt.Sprintf("%v", dst.CISeperateCache), Match: fmt.Sprintf("%v", src.CISeperateCache) == fmt.Sprintf("%v", dst.CISeperateCache)},
+		{Field: "printing_merge_request_link_enabled", Src: fmt.Sprintf("%v", src.PrintingMergeRequestLinkEnabled), Dst: fmt.Sprintf("%v", dst.PrintingMergeRequestLinkEnabled), Match: src.PrintingMergeRequestLinkEnabled == dst.PrintingMergeRequestLinkEnabled},
+		{Field: "remove_source_branch_after_merge", Src: fmt.Sprintf("%v", src.RemoveSourceBranchAfterMerge), Dst: fmt.Sprintf("%v", dst.RemoveSourceBranchAfterMerge), Match: src.RemoveSourceBranchAfterMerge == dst.RemoveSourceBranchAfterMerge},
+		{Field: "allow_merge_on_skipped_pipeline", Src: fmt.Sprintf("%v", src.AllowMergeOnSkippedPipeline), Dst: fmt.Sprintf("%v", dst.AllowMergeOnSkippedPipeline), Match: fmt.Sprintf("%v", src.AllowMergeOnSkippedPipeline) == fmt.Sprintf("%v", dst.AllowMergeOnSkippedPipeline)},
+	}
+
+	if !hasChanges(diffs) {
+		result.Items = []internal.ItemResult{{Key: "project_settings", Action: internal.ActionSkipped, Diffs: diffs, DryRun: c.dryRun}}
+		return result
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{{Key: "project_settings", Action: internal.ActionUpdated, Diffs: diffs, DryRun: true}}
+		return result
+	}
+
+	req := gitlab.ProjectUpdateRequest{
+		Description:                     gitlab.StrPtr(src.Description),
+		AutoCancelPendingPipelines:      gitlab.StrPtr(src.AutoCancelPendingPipelines),
+		CIForwardDeploymentEnabled:      src.CIForwardDeploymentEnabled,
+		CISeperateCache:                 src.CISeperateCache,
+		PrintingMergeRequestLinkEnabled: gitlab.BoolPtr(src.PrintingMergeRequestLinkEnabled),
+		RemoveSourceBranchAfterMerge:    gitlab.BoolPtr(src.RemoveSourceBranchAfterMerge),
+		AllowMergeOnSkippedPipeline:     src.AllowMergeOnSkippedPipeline,
+	}
+
+	if err := c.dst.UpdateProject(projectPath, req); err != nil {
+		result.Items = []internal.ItemResult{{Key: "project_settings", Action: internal.ActionFailed, Error: err}}
+		return result
+	}
+
+	result.Items = []internal.ItemResult{{Key: "project_settings", Action: internal.ActionUpdated, Diffs: diffs}}
+	return result
 }
 
 // --- topics ---

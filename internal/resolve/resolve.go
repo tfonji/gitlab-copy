@@ -204,6 +204,8 @@ func updateDomainFlags(path string, groupDomains []string) error {
 // are opt-in — excluded by default.
 func buildGroupDomains(enforceSecurityPolicy, copyCompliance, linkMRPolicy bool) []string {
 	base := []string{
+		"group_settings",
+		"hooks",
 		"push_rules",
 		"description",
 		"default_branch_name",

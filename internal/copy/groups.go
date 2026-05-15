@@ -39,6 +39,10 @@ func (c *GroupCopier) Copy(groupPath string) []internal.DomainCopyResult {
 
 func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyResult {
 	switch domain {
+	case "group_settings":
+		return c.copyGroupSettings(groupPath)
+	case "hooks":
+		return c.copyGroupHooks(groupPath)
 	case "push_rules":
 		return c.copyPushRules(groupPath)
 	case "description":
@@ -1398,6 +1402,133 @@ func (c *GroupCopier) linkMergeRequestPolicy(groupPath string) internal.DomainCo
 			Key:    c.mrPolicyProject,
 			Action: internal.ActionCreated,
 		}}
+	}
+
+	return result
+}
+
+// --- group_settings ---
+
+func (c *GroupCopier) copyGroupSettings(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "group_settings"}
+
+	src, err := c.src.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source group: %w", err)
+		return result
+	}
+	dst, err := c.dst.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest group: %w", err)
+		return result
+	}
+
+	diffs := []internal.DiffLine{
+		{Field: "mentions_disabled", Src: fmt.Sprintf("%v", src.MentionsDisabled), Dst: fmt.Sprintf("%v", dst.MentionsDisabled), Match: fmt.Sprintf("%v", src.MentionsDisabled) == fmt.Sprintf("%v", dst.MentionsDisabled)},
+		{Field: "prevent_sharing_groups_outside_hierarchy", Src: fmt.Sprintf("%v", src.PreventSharingGroupsOutsideHierarchy), Dst: fmt.Sprintf("%v", dst.PreventSharingGroupsOutsideHierarchy), Match: src.PreventSharingGroupsOutsideHierarchy == dst.PreventSharingGroupsOutsideHierarchy},
+	}
+
+	if !hasChanges(diffs) {
+		result.Items = []internal.ItemResult{{Key: "group_settings", Action: internal.ActionSkipped, Diffs: diffs, DryRun: c.dryRun}}
+		return result
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{{Key: "group_settings", Action: internal.ActionUpdated, Diffs: diffs, DryRun: true}}
+		return result
+	}
+
+	if err := c.dst.UpdateGroup(groupPath, gitlab.GroupUpdateRequest{
+		MentionsDisabled:                     src.MentionsDisabled,
+		PreventSharingGroupsOutsideHierarchy: gitlab.BoolPtr(src.PreventSharingGroupsOutsideHierarchy),
+	}); err != nil {
+		result.Items = []internal.ItemResult{{Key: "group_settings", Action: internal.ActionFailed, Error: err}}
+		return result
+	}
+
+	result.Items = []internal.ItemResult{{Key: "group_settings", Action: internal.ActionUpdated, Diffs: diffs}}
+	return result
+}
+
+// --- hooks ---
+
+func (c *GroupCopier) copyGroupHooks(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "hooks"}
+
+	srcHooks, err := c.src.GetGroupHooks(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source hooks: %w", err)
+		return result
+	}
+	if len(srcHooks) == 0 {
+		return result
+	}
+
+	dstHooks, err := c.dst.GetGroupHooks(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest hooks: %w", err)
+		return result
+	}
+
+	// Match by URL — natural key for webhooks
+	dstByURL := make(map[string]bool, len(dstHooks))
+	for _, h := range dstHooks {
+		dstByURL[h.URL] = true
+	}
+
+	for _, h := range srcHooks {
+		if dstByURL[h.URL] {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    h.URL,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+			})
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    h.URL,
+				Action: internal.ActionCreated,
+				DryRun: true,
+				Error:  fmt.Errorf("webhook token cannot be copied — set token manually on dest if required"),
+			})
+			continue
+		}
+
+		if err := c.dst.CreateGroupHook(groupPath, gitlab.GroupHookRequest{
+			URL:                      h.URL,
+			Name:                     h.Name,
+			Description:              h.Description,
+			PushEvents:               h.PushEvents,
+			TagPushEvents:            h.TagPushEvents,
+			MergeRequestsEvents:      h.MergeRequestsEvents,
+			IssuesEvents:             h.IssuesEvents,
+			ConfidentialIssuesEvents: h.ConfidentialIssuesEvents,
+			NoteEvents:               h.NoteEvents,
+			ConfidentialNoteEvents:   h.ConfidentialNoteEvents,
+			PipelineEvents:           h.PipelineEvents,
+			WikiPageEvents:           h.WikiPageEvents,
+			JobEvents:                h.JobEvents,
+			DeploymentEvents:         h.DeploymentEvents,
+			ReleasesEvents:           h.ReleasesEvents,
+			SubGroupEvents:           h.SubGroupEvents,
+			MemberEvents:             h.MemberEvents,
+			FeatureFlagEvents:        h.FeatureFlagEvents,
+			EnableSSLVerification:    h.EnableSSLVerification,
+		}); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    h.URL,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    h.URL,
+				Action: internal.ActionCreated,
+				Error:  fmt.Errorf("webhook token cannot be copied — set token manually on dest if required"),
+			})
+		}
 	}
 
 	return result

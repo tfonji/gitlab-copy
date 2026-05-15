@@ -12,6 +12,8 @@ type GroupUpdateRequest struct {
 	OnlyAllowMergeIfPipelineSucceeds          *bool                            `json:"only_allow_merge_if_pipeline_succeeds,omitempty"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved *bool                            `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty"`
 	PreventMergeWithoutJiraIssue              *bool                            `json:"prevent_merge_without_jira_issue,omitempty"`
+	MentionsDisabled                          *bool                            `json:"mentions_disabled,omitempty"`
+	PreventSharingGroupsOutsideHierarchy      *bool                            `json:"prevent_sharing_groups_outside_hierarchy,omitempty"`
 }
 
 // UpdateGroup issues a PUT /groups/:id with the provided fields.

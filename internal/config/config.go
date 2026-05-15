@@ -59,6 +59,7 @@ type Config struct {
 
 // Tier 1 defaults — well-defined REST, clean natural keys.
 var DefaultGroupDomains = []string{
+	"group_settings",
 	"push_rules",
 	"description",
 	"default_branch_name",
@@ -69,15 +70,16 @@ var DefaultGroupDomains = []string{
 	"approval_rules",
 	"jira_integration",
 	"badges",
+	"hooks",
 	"compliance_frameworks",
 	"compliance_assignments",
 	"security_policy_project",
-	"enforce_security_policy",
 	"deploy_tokens",
 	"access_tokens",
 }
 
 var DefaultProjectDomains = []string{
+	"project_settings",
 	"topics",
 	"environments",
 	"protected_environments",
