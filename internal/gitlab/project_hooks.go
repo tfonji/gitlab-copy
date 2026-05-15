@@ -28,6 +28,9 @@ type ProjectHook struct {
 	EnableSSLVerification     bool   `json:"enable_ssl_verification"`
 	ResourceAccessTokenEvents bool   `json:"resource_access_token_events"`
 	EmojiEvents               bool   `json:"emoji_events"`
+	MilestoneEvents           bool   `json:"milestone_events"`
+	VulnerabilityEvents       bool   `json:"vulnerability_events"`
+	PushEventsBranchFilter    string `json:"push_events_branch_filter"`
 }
 
 // ProjectHookRequest is the write body for POST/PUT /projects/:id/hooks.

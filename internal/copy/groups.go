@@ -1456,25 +1456,30 @@ func (c *GroupCopier) copyGroupSettings(groupPath string) internal.DomainCopyRes
 
 func hookRequest(h gitlab.GroupHook) gitlab.GroupHookRequest {
 	return gitlab.GroupHookRequest{
-		URL:                      h.URL,
-		Name:                     h.Name,
-		Description:              h.Description,
-		PushEvents:               h.PushEvents,
-		TagPushEvents:            h.TagPushEvents,
-		MergeRequestsEvents:      h.MergeRequestsEvents,
-		IssuesEvents:             h.IssuesEvents,
-		ConfidentialIssuesEvents: h.ConfidentialIssuesEvents,
-		NoteEvents:               h.NoteEvents,
-		ConfidentialNoteEvents:   h.ConfidentialNoteEvents,
-		PipelineEvents:           h.PipelineEvents,
-		WikiPageEvents:           h.WikiPageEvents,
-		JobEvents:                h.JobEvents,
-		DeploymentEvents:         h.DeploymentEvents,
-		ReleasesEvents:           h.ReleasesEvents,
-		SubGroupEvents:           h.SubGroupEvents,
-		MemberEvents:             h.MemberEvents,
-		FeatureFlagEvents:        h.FeatureFlagEvents,
-		EnableSSLVerification:    h.EnableSSLVerification,
+		URL:                       h.URL,
+		Name:                      h.Name,
+		Description:               h.Description,
+		PushEvents:                h.PushEvents,
+		PushEventsBranchFilter:    h.PushEventsBranchFilter,
+		TagPushEvents:             h.TagPushEvents,
+		MergeRequestsEvents:       h.MergeRequestsEvents,
+		IssuesEvents:              h.IssuesEvents,
+		ConfidentialIssuesEvents:  h.ConfidentialIssuesEvents,
+		NoteEvents:                h.NoteEvents,
+		ConfidentialNoteEvents:    h.ConfidentialNoteEvents,
+		PipelineEvents:            h.PipelineEvents,
+		WikiPageEvents:            h.WikiPageEvents,
+		JobEvents:                 h.JobEvents,
+		DeploymentEvents:          h.DeploymentEvents,
+		ReleasesEvents:            h.ReleasesEvents,
+		SubGroupEvents:            h.SubGroupEvents,
+		MemberEvents:              h.MemberEvents,
+		FeatureFlagEvents:         h.FeatureFlagEvents,
+		EnableSSLVerification:     h.EnableSSLVerification,
+		MilestoneEvents:           h.MilestoneEvents,
+		VulnerabilityEvents:       h.VulnerabilityEvents,
+		EmojiEvents:               h.EmojiEvents,
+		ResourceAccessTokenEvents: h.ResourceAccessTokenEvents,
 	}
 }
 
@@ -1482,6 +1487,7 @@ func hooksMatch(src, dst gitlab.GroupHook) bool {
 	return src.Name == dst.Name &&
 		src.Description == dst.Description &&
 		src.PushEvents == dst.PushEvents &&
+		src.PushEventsBranchFilter == dst.PushEventsBranchFilter &&
 		src.TagPushEvents == dst.TagPushEvents &&
 		src.MergeRequestsEvents == dst.MergeRequestsEvents &&
 		src.IssuesEvents == dst.IssuesEvents &&
@@ -1496,7 +1502,11 @@ func hooksMatch(src, dst gitlab.GroupHook) bool {
 		src.SubGroupEvents == dst.SubGroupEvents &&
 		src.MemberEvents == dst.MemberEvents &&
 		src.FeatureFlagEvents == dst.FeatureFlagEvents &&
-		src.EnableSSLVerification == dst.EnableSSLVerification
+		src.EnableSSLVerification == dst.EnableSSLVerification &&
+		src.MilestoneEvents == dst.MilestoneEvents &&
+		src.VulnerabilityEvents == dst.VulnerabilityEvents &&
+		src.EmojiEvents == dst.EmojiEvents &&
+		src.ResourceAccessTokenEvents == dst.ResourceAccessTokenEvents
 }
 
 func (c *GroupCopier) copyGroupHooks(groupPath string) internal.DomainCopyResult {

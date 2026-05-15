@@ -1486,6 +1486,7 @@ func projectHookRequest(h gitlab.ProjectHook) gitlab.ProjectHookRequest {
 		Name:                      h.Name,
 		Description:               h.Description,
 		PushEvents:                h.PushEvents,
+		PushEventsBranchFilter:    h.PushEventsBranchFilter,
 		TagPushEvents:             h.TagPushEvents,
 		MergeRequestsEvents:       h.MergeRequestsEvents,
 		IssuesEvents:              h.IssuesEvents,
@@ -1502,6 +1503,8 @@ func projectHookRequest(h gitlab.ProjectHook) gitlab.ProjectHookRequest {
 		EnableSSLVerification:     h.EnableSSLVerification,
 		ResourceAccessTokenEvents: h.ResourceAccessTokenEvents,
 		EmojiEvents:               h.EmojiEvents,
+		MilestoneEvents:           h.MilestoneEvents,
+		VulnerabilityEvents:       h.VulnerabilityEvents,
 	}
 }
 
@@ -1509,6 +1512,7 @@ func projectHooksMatch(src, dst gitlab.ProjectHook) bool {
 	return src.Name == dst.Name &&
 		src.Description == dst.Description &&
 		src.PushEvents == dst.PushEvents &&
+		src.PushEventsBranchFilter == dst.PushEventsBranchFilter &&
 		src.TagPushEvents == dst.TagPushEvents &&
 		src.MergeRequestsEvents == dst.MergeRequestsEvents &&
 		src.IssuesEvents == dst.IssuesEvents &&
@@ -1524,7 +1528,9 @@ func projectHooksMatch(src, dst gitlab.ProjectHook) bool {
 		src.FeatureFlagEvents == dst.FeatureFlagEvents &&
 		src.EnableSSLVerification == dst.EnableSSLVerification &&
 		src.ResourceAccessTokenEvents == dst.ResourceAccessTokenEvents &&
-		src.EmojiEvents == dst.EmojiEvents
+		src.EmojiEvents == dst.EmojiEvents &&
+		src.MilestoneEvents == dst.MilestoneEvents &&
+		src.VulnerabilityEvents == dst.VulnerabilityEvents
 }
 
 func (c *ProjectCopier) copyProjectHooks(projectPath string) internal.DomainCopyResult {
