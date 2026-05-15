@@ -63,8 +63,8 @@ domains:
     - compliance_frameworks           # compliance framework definitions (name, description, color, pipeline config)
     - compliance_assignments          # which projects have which frameworks assigned — must run after compliance_frameworks
     - security_policy_project         # links the security policy project to the group — requires the policy project to exist on dest first
-    - link_merge_request_policy       # links the MR approval policy project to root groups — no compliance framework deletion (set security.merge_request_policy_project)
-    # - enforce_security_policy       # deletes compliance frameworks on dest root groups then links policy project (set security.policy_project)
+    # link_merge_request_policy, enforce_security_policy, compliance_frameworks, compliance_assignments
+    # are managed dynamically by the resolve step via pipeline variables — do not add manually here
     - deploy_tokens                   # group deploy tokens (new token value generated on dest — surfaced in report)
     - access_tokens                   # group access tokens — same name, scopes and access level copied, new token value surfaced in report
 

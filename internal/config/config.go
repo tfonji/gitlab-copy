@@ -73,7 +73,6 @@ var DefaultGroupDomains = []string{
 	"compliance_assignments",
 	"security_policy_project",
 	"enforce_security_policy",
-	"link_merge_request_policy",
 	"deploy_tokens",
 	"access_tokens",
 }
