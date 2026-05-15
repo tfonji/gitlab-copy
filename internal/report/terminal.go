@@ -107,9 +107,24 @@ func (t *Terminal) writeDomain(d internal.DomainCopyResult) {
 	}
 
 	if active == 0 && len(d.Items) > 0 {
-		// All skipped — compact single line
-		t.writef("%s%s%s — %s·%s all match (%d)\n",
-			indent, colorDim, d.Domain, colorDim, colorReset, len(d.Items))
+		// Check if any skipped items have warnings
+		warnings := 0
+		for _, item := range d.Items {
+			if item.Error != nil {
+				warnings++
+			}
+		}
+		if warnings == 0 {
+			// Fully clean — compact single line
+			t.writef("%s%s%s — %s·%s all match (%d)\n",
+				indent, colorDim, d.Domain, colorDim, colorReset, len(d.Items))
+			return
+		}
+		// Has warnings — expand to show them
+		t.writef("%s%s%s%s\n", indent, colorBold, d.Domain, colorReset)
+		for _, item := range d.Items {
+			t.writeItem(indent+"  ", item)
+		}
 		return
 	}
 
