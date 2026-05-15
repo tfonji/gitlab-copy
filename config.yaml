@@ -50,6 +50,7 @@ concurrency:
 # ---------------------------------------------------------------------------
 domains:
   groups:
+    - group_settings                  # mentions_disabled, prevent_sharing_groups_outside_hierarchy
     - push_rules                      # commit message regex, branch name rules, file size limits
     - description                     # group description
     - default_branch_name             # default branch for new projects in the group
@@ -60,15 +61,17 @@ domains:
     - approval_rules                  # MR approval rule names and required counts (approvers need manual assignment)
     - jira_integration                # Jira integration config (credentials require manual verification on dest)
     - badges                          # group-level badges (inherited by all projects in the group)
+    - hooks                           # group webhooks — token cannot be copied, set manually on dest if required
     - compliance_frameworks           # compliance framework definitions (name, description, color, pipeline config)
     - compliance_assignments          # which projects have which frameworks assigned — must run after compliance_frameworks
     - security_policy_project         # links the security policy project to the group — requires the policy project to exist on dest first
-    # link_merge_request_policy, enforce_security_policy, compliance_frameworks, compliance_assignments
+    # link_merge_request_policy, enforce_security_policy
     # are managed dynamically by the resolve step via pipeline variables — do not add manually here
     - deploy_tokens                   # group deploy tokens (new token value generated on dest — surfaced in report)
     - access_tokens                   # group access tokens — same name, scopes and access level copied, new token value surfaced in report
 
   projects:
+    - project_settings                # core project settings — description, auto_cancel_pending_pipelines, ci_forward_deployment_enabled, ci_separated_caches, printing_merge_request_link_enabled, remove_source_branch_after_merge, allow_merge_on_skipped_pipeline
     - topics                          # project tags/labels (AppID, CMDB ID, etc.)
     - environments                    # deployment environments with external URLs
     - protected_environments          # role-based deploy access per environment
