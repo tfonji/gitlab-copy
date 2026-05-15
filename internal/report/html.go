@@ -151,7 +151,7 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
 	} else if result.HasFailures {
 		fmt.Fprintf(f, `<div class="status-banner has-failures">✗ Copy finished with failures — review required</div>`)
 	} else {
-		fmt.Fprintf(f, `<div class="status-banner clean">✓ Copy complete — %d created, %d updated, %d skipped, %d failed</div>`,
+		fmt.Fprintf(f, `<div class="status-banner clean">✓ Copy complete — %d created, %d updated, %d matches, %d failed</div>`,
 			created, updated, skipped, failed)
 	}
 
@@ -170,7 +170,7 @@ func WriteHTML(result *internal.RunResult, dir string) (string, error) {
 	// Summary table
 
 	fmt.Fprintf(f, `<div class="summary-table"><table>
-<thead><tr><th>Scope</th><th>Created</th><th>Updated</th><th>Skipped</th><th>Failed</th></tr></thead><tbody>`)
+<thead><tr><th>Scope</th><th>Created</th><th>Updated</th><th>Matches</th><th>Failed</th></tr></thead><tbody>`)
 	for _, gr := range result.Groups {
 		c, u, s, fa := 0, 0, 0, 0
 		for _, d := range gr.Domains {
@@ -343,7 +343,7 @@ func writeDomainRowHTML(f *os.File, d internal.DomainCopyResult) {
 		}
 	}
 	if allSkipped {
-		fmt.Fprintf(f, `<span class="all-skipped">all %d skipped</span>`, len(d.Items))
+		fmt.Fprintf(f, `<span class="all-skipped">all %d match</span>`, len(d.Items))
 		fmt.Fprintf(f, `</div></div>`)
 		return
 	}
@@ -407,7 +407,7 @@ func itemLabelClassText(item internal.ItemResult) (class, text string) {
 		case internal.ActionUpdated:
 			return "dryupdate", "DryRun(Update)"
 		default:
-			return "dryskip", "DryRun(Skip)"
+			return "dryskip", "DryRun(Match)"
 		}
 	}
 	switch item.Action {
@@ -416,7 +416,7 @@ func itemLabelClassText(item internal.ItemResult) (class, text string) {
 	case internal.ActionUpdated:
 		return "updated", "Updated"
 	case internal.ActionSkipped:
-		return "skipped", "Skipped"
+		return "skipped", "Matches"
 	case internal.ActionFailed:
 		return "failed", "Failed"
 	default:
@@ -522,7 +522,7 @@ func writeStats(f *os.File, result *internal.RunResult, created, updated, skippe
 	fmt.Fprintf(f, `<div class="stats-card"><h3>Run Summary</h3><div class="stats-numbers">`)
 	fmt.Fprintf(f, `<div class="stats-num created"><div class="val">%d</div><div class="lbl">Created</div></div>`, created)
 	fmt.Fprintf(f, `<div class="stats-num updated"><div class="val">%d</div><div class="lbl">Updated</div></div>`, updated)
-	fmt.Fprintf(f, `<div class="stats-num skipped"><div class="val">%d</div><div class="lbl">Skipped</div></div>`, skipped)
+	fmt.Fprintf(f, `<div class="stats-num skipped"><div class="val">%d</div><div class="lbl">Matches</div></div>`, skipped)
 	fmt.Fprintf(f, `<div class="stats-num failed"><div class="val">%d</div><div class="lbl">Failed</div></div>`, failed)
 	fmt.Fprintf(f, `</div>`)
 	fmt.Fprintf(f, `<div style="margin-top:12px;font-size:12px;color:#888">%d group(s) &nbsp;·&nbsp; %d project(s) &nbsp;·&nbsp; %d domain(s)</div>`, groupCount, projectCount, domainsRun)
@@ -537,7 +537,7 @@ func writeStats(f *os.File, result *internal.RunResult, created, updated, skippe
 
 	// Panel 3 — Domain breakdown
 	fmt.Fprintf(f, `<div class="stats-card"><h3>By Domain</h3>`)
-	fmt.Fprintf(f, `<table class="domain-stats-table"><thead><tr><th>Domain</th><th>Created</th><th>Updated</th><th>Skipped</th><th>Failed</th></tr></thead><tbody>`)
+	fmt.Fprintf(f, `<table class="domain-stats-table"><thead><tr><th>Domain</th><th>Created</th><th>Updated</th><th>Matches</th><th>Failed</th></tr></thead><tbody>`)
 	for _, name := range domainOrder {
 		ds := domainMap[name]
 		fmtNum := func(n int, cls string) string {

@@ -961,17 +961,7 @@ func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.Domai
 		for _, fwName := range assignment.FrameworkNames {
 			itemKey := assignment.ProjectPath + " → " + fwName
 
-			// Already assigned on dest
-			if dstAssigned[assignment.ProjectPath][fwName] {
-				result.Items = append(result.Items, internal.ItemResult{
-					Key:    itemKey,
-					Action: internal.ActionSkipped,
-					DryRun: c.dryRun,
-				})
-				continue
-			}
-
-			// Framework doesn't exist on dest yet
+			// Framework doesn't exist on dest — skip
 			dstID, ok := dstIDByName[fwName]
 			if !ok {
 				result.Items = append(result.Items, internal.ItemResult{
@@ -979,6 +969,17 @@ func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.Domai
 					Action: internal.ActionSkipped,
 					DryRun: c.dryRun,
 					Error:  fmt.Errorf("framework %q not found on dest — run compliance_frameworks first", fwName),
+				})
+				continue
+			}
+
+			// Only consider already-assigned if the framework also exists on dest.
+			// Orphaned assignment records (from deleted frameworks) are not treated as done.
+			if dstAssigned[assignment.ProjectPath][fwName] {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    itemKey,
+					Action: internal.ActionSkipped,
+					DryRun: c.dryRun,
 				})
 				continue
 			}

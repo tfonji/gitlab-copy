@@ -57,13 +57,13 @@ func (t *Terminal) Write(result *internal.RunResult) {
 
 	created, updated, skipped, failed := result.TotalCounts()
 	if result.HasFailures {
-		t.writef("%s%s✗ Copy finished with failures%s — %d created, %d updated, %d skipped, %d failed\n",
+		t.writef("%s%s✗ Copy finished with failures%s — %d created, %d updated, %d matches, %d failed\n",
 			colorBold, colorRed, colorReset, created, updated, skipped, failed)
 	} else if result.DryRun {
 		t.writef("%s%s~ Dry-run complete%s — %d would create, %d would update, %d would skip\n",
 			colorBold, colorBlue, colorReset, created, updated, skipped)
 	} else {
-		t.writef("%s%s✓ Copy complete%s — %d created, %d updated, %d skipped, %d failed\n",
+		t.writef("%s%s✓ Copy complete%s — %d created, %d updated, %d matches, %d failed\n",
 			colorBold, colorGreen, colorReset, created, updated, skipped, failed)
 	}
 	t.writeln("")
@@ -108,7 +108,7 @@ func (t *Terminal) writeDomain(d internal.DomainCopyResult) {
 
 	if active == 0 && len(d.Items) > 0 {
 		// All skipped — compact single line
-		t.writef("%s%s%s — %s·%s all skipped (%d)\n",
+		t.writef("%s%s%s — %s·%s all match (%d)\n",
 			indent, colorDim, d.Domain, colorDim, colorReset, len(d.Items))
 		return
 	}

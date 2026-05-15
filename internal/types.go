@@ -6,7 +6,7 @@ type CopyAction string
 const (
 	ActionCreated CopyAction = "created"
 	ActionUpdated CopyAction = "updated"
-	ActionSkipped CopyAction = "skipped"
+	ActionSkipped CopyAction = "matches"
 	ActionFailed  CopyAction = "failed"
 )
 
