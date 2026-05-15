@@ -886,16 +886,34 @@ func (c *ProjectCopier) copyProtectedBranches(projectPath string) internal.Domai
 			continue
 		}
 
-		// DELETE existing branch protection before recreating
+		// For existing protections, try PATCH first (preserves policy-enforced protections).
+		// Fall back to delete+recreate only if PATCH fails.
 		if exists {
-			if err := c.dst.DeleteProjectProtectedBranch(projectPath, src.Name); err != nil {
-				result.Items = append(result.Items, internal.ItemResult{
-					Key:    src.Name,
-					Action: internal.ActionFailed,
-					Error:  fmt.Errorf("deleting existing protection before recreate: %w", err),
-				})
-				continue
+			if err := c.dst.UpdateProjectProtectedBranch(projectPath, src.Name, req); err != nil {
+				// PATCH failed — try delete+recreate
+				if delErr := c.dst.DeleteProjectProtectedBranch(projectPath, src.Name); delErr != nil {
+					result.Items = append(result.Items, internal.ItemResult{
+						Key:    src.Name,
+						Action: internal.ActionFailed,
+						Error:  fmt.Errorf("update failed (%v), delete also failed: %w", err, delErr),
+					})
+					continue
+				}
+				if err := c.dst.CreateProjectProtectedBranch(projectPath, req); err != nil {
+					result.Items = append(result.Items, internal.ItemResult{
+						Key:    src.Name,
+						Action: internal.ActionFailed,
+						Error:  err,
+					})
+					continue
+				}
 			}
+			item := internal.ItemResult{Key: src.Name, Action: action, Diffs: diffs}
+			if hasUserGroupAccessLevels(src) {
+				item.Error = fmt.Errorf("user/group-specific access levels not copied — role-based levels only")
+			}
+			result.Items = append(result.Items, item)
+			continue
 		}
 
 		if err := c.dst.CreateProjectProtectedBranch(projectPath, req); err != nil {

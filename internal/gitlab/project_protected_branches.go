@@ -89,6 +89,10 @@ func (c *Client) CreateProjectProtectedBranch(projectPath string, req ProtectedB
 	return c.post("/projects/"+encodePath(projectPath)+"/protected_branches", req, nil)
 }
 
+func (c *Client) UpdateProjectProtectedBranch(projectPath string, branchName string, req ProtectedBranchRequest) error {
+	return c.patch("/projects/"+encodePath(projectPath)+"/protected_branches/"+encodePath(branchName), req)
+}
+
 func (c *Client) DeleteProjectProtectedBranch(projectPath string, branchName string) error {
 	return c.delete("/projects/" + encodePath(projectPath) + "/protected_branches/" + encodePath(branchName))
 }
