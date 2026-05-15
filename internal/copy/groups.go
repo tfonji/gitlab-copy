@@ -938,21 +938,6 @@ func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.Domai
 		dstIDByName[fw.Name] = fw.ID
 	}
 
-	// Build dest assignment index: projectPath → set of framework names already assigned
-	dstAssignments, err := c.dst.GetGroupComplianceAssignments(groupPath)
-	if err != nil {
-		result.Error = fmt.Errorf("fetching dest compliance assignments: %w", err)
-		return result
-	}
-	dstAssigned := make(map[string]map[string]bool)
-	for _, a := range dstAssignments {
-		names := make(map[string]bool, len(a.FrameworkNames))
-		for _, n := range a.FrameworkNames {
-			names[n] = true
-		}
-		dstAssigned[a.ProjectPath] = names
-	}
-
 	sort.Slice(srcAssignments, func(i, j int) bool {
 		return srcAssignments[i].ProjectPath < srcAssignments[j].ProjectPath
 	})
@@ -961,7 +946,7 @@ func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.Domai
 		for _, fwName := range assignment.FrameworkNames {
 			itemKey := assignment.ProjectPath + " → " + fwName
 
-			// Framework doesn't exist on dest — skip
+			// Framework doesn't exist on dest
 			dstID, ok := dstIDByName[fwName]
 			if !ok {
 				result.Items = append(result.Items, internal.ItemResult{
@@ -969,17 +954,6 @@ func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.Domai
 					Action: internal.ActionSkipped,
 					DryRun: c.dryRun,
 					Error:  fmt.Errorf("framework %q not found on dest — run compliance_frameworks first", fwName),
-				})
-				continue
-			}
-
-			// Only consider already-assigned if the framework also exists on dest.
-			// Orphaned assignment records (from deleted frameworks) are not treated as done.
-			if dstAssigned[assignment.ProjectPath][fwName] {
-				result.Items = append(result.Items, internal.ItemResult{
-					Key:    itemKey,
-					Action: internal.ActionSkipped,
-					DryRun: c.dryRun,
 				})
 				continue
 			}
