@@ -39,6 +39,7 @@ type ProjectHookRequest struct {
 	Name                      string `json:"name,omitempty"`
 	Description               string `json:"description,omitempty"`
 	PushEvents                bool   `json:"push_events"`
+	PushEventsBranchFilter    string `json:"push_events_branch_filter,omitempty"`
 	TagPushEvents             bool   `json:"tag_push_events"`
 	MergeRequestsEvents       bool   `json:"merge_requests_events"`
 	IssuesEvents              bool   `json:"issues_events"`
@@ -55,6 +56,8 @@ type ProjectHookRequest struct {
 	EnableSSLVerification     bool   `json:"enable_ssl_verification"`
 	ResourceAccessTokenEvents bool   `json:"resource_access_token_events"`
 	EmojiEvents               bool   `json:"emoji_events"`
+	MilestoneEvents           bool   `json:"milestone_events"`
+	VulnerabilityEvents       bool   `json:"vulnerability_events"`
 }
 
 func (c *Client) GetProjectHooks(projectPath string) ([]ProjectHook, error) {
