@@ -888,18 +888,37 @@ func (c *ProjectCopier) copyProtectedBranches(projectPath string) internal.Domai
 
 		// For existing protections, try PATCH first (preserves policy-enforced protections).
 		// Fall back to delete+recreate only if PATCH fails.
+		// If both fail with 403, the protection is policy-enforced and cannot be modified via API.
 		if exists {
 			if err := c.dst.UpdateProjectProtectedBranch(projectPath, src.Name, req); err != nil {
-				// PATCH failed — try delete+recreate
-				if delErr := c.dst.DeleteProjectProtectedBranch(projectPath, src.Name); delErr != nil {
-					result.Items = append(result.Items, internal.ItemResult{
-						Key:    src.Name,
-						Action: internal.ActionFailed,
-						Error:  fmt.Errorf("update failed (%v), delete also failed: %w", err, delErr),
-					})
-					continue
-				}
-				if err := c.dst.CreateProjectProtectedBranch(projectPath, req); err != nil {
+				if apiErr, ok := err.(*gitlab.APIError); ok && apiErr.IsForbidden() {
+					// Try delete+recreate
+					if delErr := c.dst.DeleteProjectProtectedBranch(projectPath, src.Name); delErr != nil {
+						if apiErr2, ok := delErr.(*gitlab.APIError); ok && apiErr2.IsForbidden() {
+							// Both PATCH and DELETE are 403 — protection is policy-enforced, skip gracefully
+							result.Items = append(result.Items, internal.ItemResult{
+								Key:    src.Name,
+								Action: internal.ActionSkipped,
+								Error:  fmt.Errorf("protection is enforced by a security policy — cannot be modified via API"),
+							})
+							continue
+						}
+						result.Items = append(result.Items, internal.ItemResult{
+							Key:    src.Name,
+							Action: internal.ActionFailed,
+							Error:  fmt.Errorf("update failed (%v), delete also failed: %w", err, delErr),
+						})
+						continue
+					}
+					if err := c.dst.CreateProjectProtectedBranch(projectPath, req); err != nil {
+						result.Items = append(result.Items, internal.ItemResult{
+							Key:    src.Name,
+							Action: internal.ActionFailed,
+							Error:  err,
+						})
+						continue
+					}
+				} else {
 					result.Items = append(result.Items, internal.ItemResult{
 						Key:    src.Name,
 						Action: internal.ActionFailed,
@@ -917,11 +936,19 @@ func (c *ProjectCopier) copyProtectedBranches(projectPath string) internal.Domai
 		}
 
 		if err := c.dst.CreateProjectProtectedBranch(projectPath, req); err != nil {
-			result.Items = append(result.Items, internal.ItemResult{
-				Key:    src.Name,
-				Action: internal.ActionFailed,
-				Error:  err,
-			})
+			if apiErr, ok := err.(*gitlab.APIError); ok && apiErr.IsForbidden() {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.Name,
+					Action: internal.ActionSkipped,
+					Error:  fmt.Errorf("protection is enforced by a security policy — cannot be modified via API"),
+				})
+			} else {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.Name,
+					Action: internal.ActionFailed,
+					Error:  err,
+				})
+			}
 		} else {
 			item := internal.ItemResult{Key: src.Name, Action: action, Diffs: diffs}
 			if hasUserGroupAccessLevels(src) {
