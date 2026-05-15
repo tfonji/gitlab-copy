@@ -34,6 +34,8 @@ func (c *ProjectCopier) copyDomain(projectPath, domain string) internal.DomainCo
 		return c.copyTopics(projectPath)
 	case "project_settings":
 		return c.copyProjectSettings(projectPath)
+	case "project_hooks":
+		return c.copyProjectHooks(projectPath)
 	case "environments":
 		return c.copyEnvironments(projectPath)
 	case "protected_environments":
@@ -1473,6 +1475,147 @@ func roleBasedLevels(levels []gitlab.BranchAccessLevel) []int {
 			result = append(result, l.AccessLevel)
 		}
 	}
+	return result
+}
+
+// --- project_hooks ---
+
+func projectHookRequest(h gitlab.ProjectHook) gitlab.ProjectHookRequest {
+	return gitlab.ProjectHookRequest{
+		URL:                       h.URL,
+		Name:                      h.Name,
+		Description:               h.Description,
+		PushEvents:                h.PushEvents,
+		TagPushEvents:             h.TagPushEvents,
+		MergeRequestsEvents:       h.MergeRequestsEvents,
+		IssuesEvents:              h.IssuesEvents,
+		ConfidentialIssuesEvents:  h.ConfidentialIssuesEvents,
+		NoteEvents:                h.NoteEvents,
+		ConfidentialNoteEvents:    h.ConfidentialNoteEvents,
+		PipelineEvents:            h.PipelineEvents,
+		WikiPageEvents:            h.WikiPageEvents,
+		JobEvents:                 h.JobEvents,
+		DeploymentEvents:          h.DeploymentEvents,
+		ReleasesEvents:            h.ReleasesEvents,
+		MemberEvents:              h.MemberEvents,
+		FeatureFlagEvents:         h.FeatureFlagEvents,
+		EnableSSLVerification:     h.EnableSSLVerification,
+		ResourceAccessTokenEvents: h.ResourceAccessTokenEvents,
+		EmojiEvents:               h.EmojiEvents,
+	}
+}
+
+func projectHooksMatch(src, dst gitlab.ProjectHook) bool {
+	return src.Name == dst.Name &&
+		src.Description == dst.Description &&
+		src.PushEvents == dst.PushEvents &&
+		src.TagPushEvents == dst.TagPushEvents &&
+		src.MergeRequestsEvents == dst.MergeRequestsEvents &&
+		src.IssuesEvents == dst.IssuesEvents &&
+		src.ConfidentialIssuesEvents == dst.ConfidentialIssuesEvents &&
+		src.NoteEvents == dst.NoteEvents &&
+		src.ConfidentialNoteEvents == dst.ConfidentialNoteEvents &&
+		src.PipelineEvents == dst.PipelineEvents &&
+		src.WikiPageEvents == dst.WikiPageEvents &&
+		src.JobEvents == dst.JobEvents &&
+		src.DeploymentEvents == dst.DeploymentEvents &&
+		src.ReleasesEvents == dst.ReleasesEvents &&
+		src.MemberEvents == dst.MemberEvents &&
+		src.FeatureFlagEvents == dst.FeatureFlagEvents &&
+		src.EnableSSLVerification == dst.EnableSSLVerification &&
+		src.ResourceAccessTokenEvents == dst.ResourceAccessTokenEvents &&
+		src.EmojiEvents == dst.EmojiEvents
+}
+
+func (c *ProjectCopier) copyProjectHooks(projectPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "project_hooks"}
+
+	srcHooks, err := c.src.GetProjectHooks(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source hooks: %w", err)
+		return result
+	}
+	if len(srcHooks) == 0 {
+		return result
+	}
+
+	dstHooks, err := c.dst.GetProjectHooks(projectPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest hooks: %w", err)
+		return result
+	}
+
+	dstByURL := make(map[string]gitlab.ProjectHook, len(dstHooks))
+	for _, h := range dstHooks {
+		dstByURL[h.URL] = h
+	}
+
+	tokenWarning := fmt.Errorf("webhook token cannot be copied — set token manually on dest if required")
+
+	for _, src := range srcHooks {
+		req := projectHookRequest(src)
+
+		if dst, exists := dstByURL[src.URL]; exists {
+			if projectHooksMatch(src, dst) {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.URL,
+					Action: internal.ActionSkipped,
+					DryRun: c.dryRun,
+				})
+				continue
+			}
+
+			if c.dryRun {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.URL,
+					Action: internal.ActionUpdated,
+					DryRun: true,
+					Error:  tokenWarning,
+				})
+				continue
+			}
+
+			if err := c.dst.UpdateProjectHook(projectPath, dst.ID, req); err != nil {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.URL,
+					Action: internal.ActionFailed,
+					Error:  err,
+				})
+			} else {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.URL,
+					Action: internal.ActionUpdated,
+					Error:  tokenWarning,
+				})
+			}
+			continue
+		}
+
+		if c.dryRun {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.URL,
+				Action: internal.ActionCreated,
+				DryRun: true,
+				Error:  tokenWarning,
+			})
+			continue
+		}
+
+		if err := c.dst.CreateProjectHook(projectPath, req); err != nil {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.URL,
+				Action: internal.ActionFailed,
+				Error:  err,
+			})
+		} else {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    src.URL,
+				Action: internal.ActionCreated,
+				Error:  tokenWarning,
+			})
+		}
+	}
+
 	return result
 }
 

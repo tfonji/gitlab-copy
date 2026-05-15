@@ -82,3 +82,7 @@ func (c *Client) GetGroupHooks(groupPath string) ([]GroupHook, error) {
 func (c *Client) CreateGroupHook(groupPath string, req GroupHookRequest) error {
 	return c.post("/groups/"+encodePath(groupPath)+"/hooks", req, nil)
 }
+
+func (c *Client) UpdateGroupHook(groupPath string, hookID int, req GroupHookRequest) error {
+	return c.put(fmt.Sprintf("/groups/%s/hooks/%d", encodePath(groupPath), hookID), req, nil)
+}

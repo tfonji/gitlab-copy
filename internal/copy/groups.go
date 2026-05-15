@@ -1452,6 +1452,53 @@ func (c *GroupCopier) copyGroupSettings(groupPath string) internal.DomainCopyRes
 
 // --- hooks ---
 
+// --- hooks ---
+
+func hookRequest(h gitlab.GroupHook) gitlab.GroupHookRequest {
+	return gitlab.GroupHookRequest{
+		URL:                      h.URL,
+		Name:                     h.Name,
+		Description:              h.Description,
+		PushEvents:               h.PushEvents,
+		TagPushEvents:            h.TagPushEvents,
+		MergeRequestsEvents:      h.MergeRequestsEvents,
+		IssuesEvents:             h.IssuesEvents,
+		ConfidentialIssuesEvents: h.ConfidentialIssuesEvents,
+		NoteEvents:               h.NoteEvents,
+		ConfidentialNoteEvents:   h.ConfidentialNoteEvents,
+		PipelineEvents:           h.PipelineEvents,
+		WikiPageEvents:           h.WikiPageEvents,
+		JobEvents:                h.JobEvents,
+		DeploymentEvents:         h.DeploymentEvents,
+		ReleasesEvents:           h.ReleasesEvents,
+		SubGroupEvents:           h.SubGroupEvents,
+		MemberEvents:             h.MemberEvents,
+		FeatureFlagEvents:        h.FeatureFlagEvents,
+		EnableSSLVerification:    h.EnableSSLVerification,
+	}
+}
+
+func hooksMatch(src, dst gitlab.GroupHook) bool {
+	return src.Name == dst.Name &&
+		src.Description == dst.Description &&
+		src.PushEvents == dst.PushEvents &&
+		src.TagPushEvents == dst.TagPushEvents &&
+		src.MergeRequestsEvents == dst.MergeRequestsEvents &&
+		src.IssuesEvents == dst.IssuesEvents &&
+		src.ConfidentialIssuesEvents == dst.ConfidentialIssuesEvents &&
+		src.NoteEvents == dst.NoteEvents &&
+		src.ConfidentialNoteEvents == dst.ConfidentialNoteEvents &&
+		src.PipelineEvents == dst.PipelineEvents &&
+		src.WikiPageEvents == dst.WikiPageEvents &&
+		src.JobEvents == dst.JobEvents &&
+		src.DeploymentEvents == dst.DeploymentEvents &&
+		src.ReleasesEvents == dst.ReleasesEvents &&
+		src.SubGroupEvents == dst.SubGroupEvents &&
+		src.MemberEvents == dst.MemberEvents &&
+		src.FeatureFlagEvents == dst.FeatureFlagEvents &&
+		src.EnableSSLVerification == dst.EnableSSLVerification
+}
+
 func (c *GroupCopier) copyGroupHooks(groupPath string) internal.DomainCopyResult {
 	result := internal.DomainCopyResult{Domain: "hooks"}
 
@@ -1470,63 +1517,76 @@ func (c *GroupCopier) copyGroupHooks(groupPath string) internal.DomainCopyResult
 		return result
 	}
 
-	// Match by URL — natural key for webhooks
-	dstByURL := make(map[string]bool, len(dstHooks))
+	// Match by URL
+	dstByURL := make(map[string]gitlab.GroupHook, len(dstHooks))
 	for _, h := range dstHooks {
-		dstByURL[h.URL] = true
+		dstByURL[h.URL] = h
 	}
 
-	for _, h := range srcHooks {
-		if dstByURL[h.URL] {
-			result.Items = append(result.Items, internal.ItemResult{
-				Key:    h.URL,
-				Action: internal.ActionSkipped,
-				DryRun: c.dryRun,
-			})
+	tokenWarning := fmt.Errorf("webhook token cannot be copied — set token manually on dest if required")
+
+	for _, src := range srcHooks {
+		req := hookRequest(src)
+
+		if dst, exists := dstByURL[src.URL]; exists {
+			if hooksMatch(src, dst) {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.URL,
+					Action: internal.ActionSkipped,
+					DryRun: c.dryRun,
+				})
+				continue
+			}
+
+			// Fields differ — update
+			if c.dryRun {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.URL,
+					Action: internal.ActionUpdated,
+					DryRun: true,
+					Error:  tokenWarning,
+				})
+				continue
+			}
+
+			if err := c.dst.UpdateGroupHook(groupPath, dst.ID, req); err != nil {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.URL,
+					Action: internal.ActionFailed,
+					Error:  err,
+				})
+			} else {
+				result.Items = append(result.Items, internal.ItemResult{
+					Key:    src.URL,
+					Action: internal.ActionUpdated,
+					Error:  tokenWarning,
+				})
+			}
 			continue
 		}
 
+		// Not on dest — create
 		if c.dryRun {
 			result.Items = append(result.Items, internal.ItemResult{
-				Key:    h.URL,
+				Key:    src.URL,
 				Action: internal.ActionCreated,
 				DryRun: true,
-				Error:  fmt.Errorf("webhook token cannot be copied — set token manually on dest if required"),
+				Error:  tokenWarning,
 			})
 			continue
 		}
 
-		if err := c.dst.CreateGroupHook(groupPath, gitlab.GroupHookRequest{
-			URL:                      h.URL,
-			Name:                     h.Name,
-			Description:              h.Description,
-			PushEvents:               h.PushEvents,
-			TagPushEvents:            h.TagPushEvents,
-			MergeRequestsEvents:      h.MergeRequestsEvents,
-			IssuesEvents:             h.IssuesEvents,
-			ConfidentialIssuesEvents: h.ConfidentialIssuesEvents,
-			NoteEvents:               h.NoteEvents,
-			ConfidentialNoteEvents:   h.ConfidentialNoteEvents,
-			PipelineEvents:           h.PipelineEvents,
-			WikiPageEvents:           h.WikiPageEvents,
-			JobEvents:                h.JobEvents,
-			DeploymentEvents:         h.DeploymentEvents,
-			ReleasesEvents:           h.ReleasesEvents,
-			SubGroupEvents:           h.SubGroupEvents,
-			MemberEvents:             h.MemberEvents,
-			FeatureFlagEvents:        h.FeatureFlagEvents,
-			EnableSSLVerification:    h.EnableSSLVerification,
-		}); err != nil {
+		if err := c.dst.CreateGroupHook(groupPath, req); err != nil {
 			result.Items = append(result.Items, internal.ItemResult{
-				Key:    h.URL,
+				Key:    src.URL,
 				Action: internal.ActionFailed,
 				Error:  err,
 			})
 		} else {
 			result.Items = append(result.Items, internal.ItemResult{
-				Key:    h.URL,
+				Key:    src.URL,
 				Action: internal.ActionCreated,
-				Error:  fmt.Errorf("webhook token cannot be copied — set token manually on dest if required"),
+				Error:  tokenWarning,
 			})
 		}
 	}

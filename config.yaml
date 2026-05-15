@@ -72,6 +72,7 @@ domains:
 
   projects:
     - project_settings                # core project settings — description, auto_cancel_pending_pipelines, ci_forward_deployment_enabled, ci_separated_caches, printing_merge_request_link_enabled, remove_source_branch_after_merge, allow_merge_on_skipped_pipeline
+    - project_hooks                   # project webhooks — token cannot be copied, set manually on dest if required
     - topics                          # project tags/labels (AppID, CMDB ID, etc.)
     - environments                    # deployment environments with external URLs
     - protected_environments          # role-based deploy access per environment

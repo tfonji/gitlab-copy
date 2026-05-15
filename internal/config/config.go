@@ -80,6 +80,7 @@ var DefaultGroupDomains = []string{
 
 var DefaultProjectDomains = []string{
 	"project_settings",
+	"project_hooks",
 	"topics",
 	"environments",
 	"protected_environments",
