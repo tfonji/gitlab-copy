@@ -1461,6 +1461,7 @@ func hookRequest(h gitlab.GroupHook) gitlab.GroupHookRequest {
 		Description:               h.Description,
 		PushEvents:                h.PushEvents,
 		PushEventsBranchFilter:    h.PushEventsBranchFilter,
+		BranchFilterStrategy:      h.BranchFilterStrategy,
 		TagPushEvents:             h.TagPushEvents,
 		MergeRequestsEvents:       h.MergeRequestsEvents,
 		IssuesEvents:              h.IssuesEvents,
@@ -1480,6 +1481,7 @@ func hookRequest(h gitlab.GroupHook) gitlab.GroupHookRequest {
 		VulnerabilityEvents:       h.VulnerabilityEvents,
 		EmojiEvents:               h.EmojiEvents,
 		ResourceAccessTokenEvents: h.ResourceAccessTokenEvents,
+		ProjectEvents:             h.ProjectEvents,
 	}
 }
 
@@ -1488,6 +1490,7 @@ func hooksMatch(src, dst gitlab.GroupHook) bool {
 		src.Description == dst.Description &&
 		src.PushEvents == dst.PushEvents &&
 		src.PushEventsBranchFilter == dst.PushEventsBranchFilter &&
+		src.BranchFilterStrategy == dst.BranchFilterStrategy &&
 		src.TagPushEvents == dst.TagPushEvents &&
 		src.MergeRequestsEvents == dst.MergeRequestsEvents &&
 		src.IssuesEvents == dst.IssuesEvents &&
@@ -1506,7 +1509,8 @@ func hooksMatch(src, dst gitlab.GroupHook) bool {
 		src.MilestoneEvents == dst.MilestoneEvents &&
 		src.VulnerabilityEvents == dst.VulnerabilityEvents &&
 		src.EmojiEvents == dst.EmojiEvents &&
-		src.ResourceAccessTokenEvents == dst.ResourceAccessTokenEvents
+		src.ResourceAccessTokenEvents == dst.ResourceAccessTokenEvents &&
+		src.ProjectEvents == dst.ProjectEvents
 }
 
 func (c *GroupCopier) copyGroupHooks(groupPath string) internal.DomainCopyResult {

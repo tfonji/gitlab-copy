@@ -13,6 +13,7 @@ type GroupHook struct {
 	Description               string `json:"description"`
 	PushEvents                bool   `json:"push_events"`
 	PushEventsBranchFilter    string `json:"push_events_branch_filter"`
+	BranchFilterStrategy      string `json:"branch_filter_strategy"`
 	TagPushEvents             bool   `json:"tag_push_events"`
 	MergeRequestsEvents       bool   `json:"merge_requests_events"`
 	IssuesEvents              bool   `json:"issues_events"`
@@ -32,6 +33,7 @@ type GroupHook struct {
 	VulnerabilityEvents       bool   `json:"vulnerability_events"`
 	EmojiEvents               bool   `json:"emoji_events"`
 	ResourceAccessTokenEvents bool   `json:"resource_access_token_events"`
+	ProjectEvents             bool   `json:"project_events"`
 }
 
 // GroupHookRequest is the write body for POST /groups/:id/hooks.
@@ -42,6 +44,7 @@ type GroupHookRequest struct {
 	Description               string `json:"description,omitempty"`
 	PushEvents                bool   `json:"push_events"`
 	PushEventsBranchFilter    string `json:"push_events_branch_filter"`
+	BranchFilterStrategy      string `json:"branch_filter_strategy"`
 	TagPushEvents             bool   `json:"tag_push_events"`
 	MergeRequestsEvents       bool   `json:"merge_requests_events"`
 	IssuesEvents              bool   `json:"issues_events"`
@@ -61,6 +64,7 @@ type GroupHookRequest struct {
 	VulnerabilityEvents       bool   `json:"vulnerability_events"`
 	EmojiEvents               bool   `json:"emoji_events"`
 	ResourceAccessTokenEvents bool   `json:"resource_access_token_events"`
+	ProjectEvents             bool   `json:"project_events"`
 }
 
 func (c *Client) GetGroupHooks(groupPath string) ([]GroupHook, error) {

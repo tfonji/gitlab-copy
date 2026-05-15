@@ -1487,6 +1487,7 @@ func projectHookRequest(h gitlab.ProjectHook) gitlab.ProjectHookRequest {
 		Description:               h.Description,
 		PushEvents:                h.PushEvents,
 		PushEventsBranchFilter:    h.PushEventsBranchFilter,
+		BranchFilterStrategy:      h.BranchFilterStrategy,
 		TagPushEvents:             h.TagPushEvents,
 		MergeRequestsEvents:       h.MergeRequestsEvents,
 		IssuesEvents:              h.IssuesEvents,
@@ -1513,6 +1514,7 @@ func projectHooksMatch(src, dst gitlab.ProjectHook) bool {
 		src.Description == dst.Description &&
 		src.PushEvents == dst.PushEvents &&
 		src.PushEventsBranchFilter == dst.PushEventsBranchFilter &&
+		src.BranchFilterStrategy == dst.BranchFilterStrategy &&
 		src.TagPushEvents == dst.TagPushEvents &&
 		src.MergeRequestsEvents == dst.MergeRequestsEvents &&
 		src.IssuesEvents == dst.IssuesEvents &&

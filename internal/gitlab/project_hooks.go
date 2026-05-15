@@ -31,6 +31,7 @@ type ProjectHook struct {
 	MilestoneEvents           bool   `json:"milestone_events"`
 	VulnerabilityEvents       bool   `json:"vulnerability_events"`
 	PushEventsBranchFilter    string `json:"push_events_branch_filter"`
+	BranchFilterStrategy      string `json:"branch_filter_strategy"`
 }
 
 // ProjectHookRequest is the write body for POST/PUT /projects/:id/hooks.
@@ -40,6 +41,7 @@ type ProjectHookRequest struct {
 	Description               string `json:"description,omitempty"`
 	PushEvents                bool   `json:"push_events"`
 	PushEventsBranchFilter    string `json:"push_events_branch_filter,omitempty"`
+	BranchFilterStrategy      string `json:"branch_filter_strategy,omitempty"`
 	TagPushEvents             bool   `json:"tag_push_events"`
 	MergeRequestsEvents       bool   `json:"merge_requests_events"`
 	IssuesEvents              bool   `json:"issues_events"`
