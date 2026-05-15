@@ -80,6 +80,10 @@ func WriteTokensReport(result *internal.RunResult, dir string) (bool, error) {
 	fmt.Fprintf(f, "These tokens were generated on the destination instance during the migration run.\n")
 	fmt.Fprintf(f, "The source token values cannot be recovered — update any CI variables, webhooks,\n")
 	fmt.Fprintf(f, "or external services that referenced the old tokens with the new values below.\n\n")
+	fmt.Fprintf(f, "> **Webhook tokens** — If any group or project webhooks were configured with a secret token\n")
+	fmt.Fprintf(f, "> on the source instance, those tokens are not included here (the API never returns them).\n")
+	fmt.Fprintf(f, "> Go to each webhook on the destination instance and set the secret token manually:\n")
+	fmt.Fprintf(f, "> **Group → Settings → Webhooks** or **Project → Settings → Webhooks → Edit**.\n\n")
 
 	fmt.Fprintf(f, "| Type | Scope | Path | Name / Description | Token Value |\n")
 	fmt.Fprintf(f, "|------|-------|------|--------------------|-------------|\n")
