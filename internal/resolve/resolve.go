@@ -44,6 +44,13 @@ func Run(configPath string, srcClient, dstClient *gitlab.Client, w io.Writer) er
 		if err := updateDomainFlags(configPath, groupDomains); err != nil {
 			return fmt.Errorf("updating domain flags: %w", err)
 		}
+		if os.Getenv("CI") == "true" {
+			if err := commitAndPush(configPath, nil, w); err != nil {
+				return fmt.Errorf("committing config: %w", err)
+			}
+		} else {
+			fmt.Fprintln(w, "Not running in CI — config updated locally, no git push")
+		}
 		return nil
 	}
 
@@ -388,7 +395,12 @@ func commitAndPush(configPath string, appIDs []string, w io.Writer) error {
 		branch = "main"
 	}
 
-	commitMsg := fmt.Sprintf("chore: resolve config for APPID(s) %s", strings.Join(appIDs, ", "))
+	var commitMsg string
+	if len(appIDs) > 0 {
+		commitMsg = fmt.Sprintf("chore: resolve config for APPID(s) %s", strings.Join(appIDs, ", "))
+	} else {
+		commitMsg = "chore: update domain flags in config"
+	}
 
 	cmds := [][]string{
 		{"git", "config", "user.email", "gitlab-ci@migration"},
