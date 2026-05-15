@@ -968,12 +968,11 @@ func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.Domai
 			}
 
 			if err := c.dst.AssignComplianceFramework(assignment.ProjectPath, dstID); err != nil {
-				// If the mutation doesn't exist, the dest instance doesn't support it
 				if strings.Contains(err.Error(), "doesn't exist on type 'Mutation'") {
 					result.Items = append(result.Items, internal.ItemResult{
 						Key:    itemKey,
 						Action: internal.ActionSkipped,
-						Error:  fmt.Errorf("assignComplianceFramework mutation not supported on this GitLab version — assign manually via UI"),
+						Error:  fmt.Errorf("projectUpdateComplianceFrameworks mutation not supported on this GitLab version — assign manually via UI"),
 					})
 				} else {
 					result.Items = append(result.Items, internal.ItemResult{
