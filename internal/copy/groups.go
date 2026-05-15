@@ -943,49 +943,73 @@ func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.Domai
 	})
 
 	for _, assignment := range srcAssignments {
-		for _, fwName := range assignment.FrameworkNames {
-			itemKey := assignment.ProjectPath + " → " + fwName
+		// Collect all framework IDs for this project in one batch
+		var frameworkIDs []string
+		var missingFrameworks []string
 
-			// Framework doesn't exist on dest
+		for _, fwName := range assignment.FrameworkNames {
 			dstID, ok := dstIDByName[fwName]
 			if !ok {
-				result.Items = append(result.Items, internal.ItemResult{
-					Key:    itemKey,
-					Action: internal.ActionSkipped,
-					DryRun: c.dryRun,
-					Error:  fmt.Errorf("framework %q not found on dest — run compliance_frameworks first", fwName),
-				})
+				missingFrameworks = append(missingFrameworks, fwName)
 				continue
 			}
+			frameworkIDs = append(frameworkIDs, dstID)
+		}
 
-			if c.dryRun {
-				result.Items = append(result.Items, internal.ItemResult{
-					Key:    itemKey,
-					Action: internal.ActionCreated,
-					DryRun: true,
-				})
-				continue
-			}
+		// Report missing frameworks
+		for _, fwName := range missingFrameworks {
+			result.Items = append(result.Items, internal.ItemResult{
+				Key:    assignment.ProjectPath + " → " + fwName,
+				Action: internal.ActionSkipped,
+				DryRun: c.dryRun,
+				Error:  fmt.Errorf("framework %q not found on dest — run compliance_frameworks first", fwName),
+			})
+		}
 
-			if err := c.dst.AssignComplianceFramework(assignment.ProjectPath, dstID); err != nil {
-				if strings.Contains(err.Error(), "doesn't exist on type 'Mutation'") {
+		if len(frameworkIDs) == 0 {
+			continue
+		}
+
+		if c.dryRun {
+			for _, fwName := range assignment.FrameworkNames {
+				if _, ok := dstIDByName[fwName]; ok {
 					result.Items = append(result.Items, internal.ItemResult{
-						Key:    itemKey,
+						Key:    assignment.ProjectPath + " → " + fwName,
+						Action: internal.ActionCreated,
+						DryRun: true,
+					})
+				}
+			}
+			continue
+		}
+
+		// Single call with all framework IDs for this project
+		if err := c.dst.AssignComplianceFrameworks(assignment.ProjectPath, frameworkIDs); err != nil {
+			if strings.Contains(err.Error(), "doesn't exist on type 'Mutation'") {
+				for _, fwName := range assignment.FrameworkNames {
+					result.Items = append(result.Items, internal.ItemResult{
+						Key:    assignment.ProjectPath + " → " + fwName,
 						Action: internal.ActionSkipped,
 						Error:  fmt.Errorf("projectUpdateComplianceFrameworks mutation not supported on this GitLab version — assign manually via UI"),
 					})
-				} else {
+				}
+			} else {
+				for _, fwName := range assignment.FrameworkNames {
 					result.Items = append(result.Items, internal.ItemResult{
-						Key:    itemKey,
+						Key:    assignment.ProjectPath + " → " + fwName,
 						Action: internal.ActionFailed,
 						Error:  err,
 					})
 				}
-			} else {
-				result.Items = append(result.Items, internal.ItemResult{
-					Key:    itemKey,
-					Action: internal.ActionCreated,
-				})
+			}
+		} else {
+			for _, fwName := range assignment.FrameworkNames {
+				if _, ok := dstIDByName[fwName]; ok {
+					result.Items = append(result.Items, internal.ItemResult{
+						Key:    assignment.ProjectPath + " → " + fwName,
+						Action: internal.ActionCreated,
+					})
+				}
 			}
 		}
 	}

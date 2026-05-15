@@ -188,6 +188,7 @@ func (c *Client) CreateComplianceFramework(groupPath string, f ComplianceFramewo
 		"name":        f.Name,
 		"description": f.Description,
 		"color":       f.Color,
+		"default":     f.Default,
 	}
 	if f.PipelineConfigurationFullPath != "" {
 		params["pipelineConfigurationFullPath"] = f.PipelineConfigurationFullPath
@@ -255,21 +256,15 @@ func (c *Client) DeleteComplianceFramework(frameworkID string, isDefault bool) e
 	return nil
 }
 
-type assignFrameworkData struct {
-	ProjectUpdateComplianceFrameworks struct {
-		Errors []string `json:"errors"`
-	} `json:"projectUpdateComplianceFrameworks"`
-}
-
 const assignComplianceFrameworkMutation = `
-mutation($projectId: ProjectID!, $frameworkId: ComplianceManagementFrameworkID!) {
-  projectUpdateComplianceFrameworks(input: { projectId: $projectId, complianceFrameworkIds: [$frameworkId] }) {
+mutation($projectId: ProjectID!, $frameworkIds: [ComplianceManagementFrameworkID!]!) {
+  projectUpdateComplianceFrameworks(input: { projectId: $projectId, complianceFrameworkIds: $frameworkIds }) {
     errors
   }
 }`
 
-func (c *Client) AssignComplianceFramework(projectPath string, frameworkID string) error {
-	// First resolve the project path to its global ID
+func (c *Client) AssignComplianceFrameworks(projectPath string, frameworkIDs []string) error {
+	// Resolve project path to global ID
 	type projectData struct {
 		Project struct {
 			ID string `json:"id"`
@@ -289,10 +284,15 @@ query($fullPath: ID!) {
 		return fmt.Errorf("project %q not found on dest", projectPath)
 	}
 
-	var data assignFrameworkData
+	type assignData struct {
+		ProjectUpdateComplianceFrameworks struct {
+			Errors []string `json:"errors"`
+		} `json:"projectUpdateComplianceFrameworks"`
+	}
+	var data assignData
 	err := c.graphql(assignComplianceFrameworkMutation, map[string]any{
-		"projectId":   pd.Project.ID,
-		"frameworkId": frameworkID,
+		"projectId":    pd.Project.ID,
+		"frameworkIds": frameworkIDs,
 	}, &data)
 	if err != nil {
 		return err
