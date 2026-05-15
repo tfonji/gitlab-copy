@@ -101,6 +101,60 @@ func Load(path string) (*Config, error) {
 	return LoadWithOverrides(path, "", "")
 }
 
+// LoadForResolve loads a config file skipping groups/projects validation.
+// Used by the resolve command which is specifically designed to populate those sections.
+func LoadForResolve(path string) (*Config, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("opening config file: %w", err)
+	}
+	defer f.Close()
+
+	var cfg Config
+	dec := yaml.NewDecoder(f)
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("parsing config file: %w", err)
+	}
+
+	applyDefaults := func(c *Config) {
+		if len(c.Domains.Groups) == 0 {
+			c.Domains.Groups = DefaultGroupDomains
+		}
+		if len(c.Domains.Projects) == 0 {
+			c.Domains.Projects = DefaultProjectDomains
+		}
+		if c.Concurrency.Groups <= 0 {
+			c.Concurrency.Groups = 5
+		}
+		if c.Concurrency.Projects <= 0 {
+			c.Concurrency.Projects = 10
+		}
+		if c.Output.Dir == "" {
+			c.Output.Dir = "./gl-copy-report"
+		}
+		if len(c.Output.Formats) == 0 {
+			c.Output.Formats = []string{"terminal", "html", "json"}
+		}
+	}
+	applyDefaults(&cfg)
+
+	// Only validate source/dest connection — skip groups/projects check
+	if cfg.Source.URL == "" {
+		return nil, fmt.Errorf("source.url is required")
+	}
+	if cfg.Destination.URL == "" {
+		return nil, fmt.Errorf("destination.url is required")
+	}
+	if cfg.Source.TokenEnv == "" {
+		return nil, fmt.Errorf("source.token_env is required")
+	}
+	if cfg.Destination.TokenEnv == "" {
+		return nil, fmt.Errorf("destination.token_env is required")
+	}
+
+	return &cfg, nil
+}
+
 // LoadWithOverrides loads config and applies CLI flag overrides before validation.
 // This allows -group and -project flags to satisfy the validation requirements
 // even when groups.include is empty in the config file.

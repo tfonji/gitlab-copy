@@ -69,7 +69,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error parsing flags: %v\n", err)
 			os.Exit(1)
 		}
-		cfg, err := config.Load(*configPath)
+		cfg, err := config.LoadForResolve(*configPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
 			os.Exit(1)
