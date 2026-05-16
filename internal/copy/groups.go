@@ -761,6 +761,16 @@ func (c *GroupCopier) copyJiraIntegration(groupPath string) internal.DomainCopyR
 func (c *GroupCopier) copyComplianceFrameworks(groupPath string) internal.DomainCopyResult {
 	result := internal.DomainCopyResult{Domain: "compliance_frameworks"}
 
+	// Compliance frameworks can only be defined at the top-level group
+	srcGroup, err := c.src.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source group: %w", err)
+		return result
+	}
+	if srcGroup.ParentID != nil {
+		return result // silently skip subgroups
+	}
+
 	srcFrameworks, err := c.src.GetGroupComplianceFrameworks(groupPath)
 	if err != nil {
 		result.Error = fmt.Errorf("fetching source compliance frameworks: %w", err)
@@ -921,6 +931,16 @@ func (c *GroupCopier) copyGroupBadges(groupPath string) internal.DomainCopyResul
 // exist on dest.
 func (c *GroupCopier) copyComplianceAssignments(groupPath string) internal.DomainCopyResult {
 	result := internal.DomainCopyResult{Domain: "compliance_assignments"}
+
+	// Compliance frameworks and assignments are top-level group only
+	srcGroup, err := c.src.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching source group: %w", err)
+		return result
+	}
+	if srcGroup.ParentID != nil {
+		return result // silently skip subgroups
+	}
 
 	srcAssignments, err := c.src.GetGroupComplianceAssignments(groupPath)
 	if err != nil {
@@ -1358,14 +1378,8 @@ func (c *GroupCopier) linkMergeRequestPolicy(groupPath string) internal.DomainCo
 		return result
 	}
 	if dstGroup.ParentID != nil {
-		result.Items = []internal.ItemResult{{
-			Key:    groupPath,
-			Action: internal.ActionSkipped,
-			DryRun: c.dryRun,
-		}}
-		return result
+		return result // silently skip subgroups
 	}
-
 	// Check if already linked to the same project
 	existing, err := c.dst.GetGroupSecurityPolicyProject(groupPath)
 	if err != nil {
