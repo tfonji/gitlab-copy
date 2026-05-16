@@ -93,11 +93,11 @@ func (c *ProjectCopier) copyProjectSettings(projectPath string) internal.DomainC
 	diffs := []internal.DiffLine{
 		{Field: "description", Src: src.Description, Dst: dst.Description, Match: src.Description == dst.Description},
 		{Field: "auto_cancel_pending_pipelines", Src: src.AutoCancelPendingPipelines, Dst: dst.AutoCancelPendingPipelines, Match: src.AutoCancelPendingPipelines == dst.AutoCancelPendingPipelines},
-		{Field: "ci_forward_deployment_enabled", Src: fmt.Sprintf("%v", src.CIForwardDeploymentEnabled), Dst: fmt.Sprintf("%v", dst.CIForwardDeploymentEnabled), Match: fmt.Sprintf("%v", src.CIForwardDeploymentEnabled) == fmt.Sprintf("%v", dst.CIForwardDeploymentEnabled)},
-		{Field: "ci_separated_caches", Src: fmt.Sprintf("%v", src.CISeperateCache), Dst: fmt.Sprintf("%v", dst.CISeperateCache), Match: fmt.Sprintf("%v", src.CISeperateCache) == fmt.Sprintf("%v", dst.CISeperateCache)},
+		{Field: "ci_forward_deployment_enabled", Src: ptrBoolStr(src.CIForwardDeploymentEnabled), Dst: ptrBoolStr(dst.CIForwardDeploymentEnabled), Match: ptrBoolStr(src.CIForwardDeploymentEnabled) == ptrBoolStr(dst.CIForwardDeploymentEnabled)},
+		{Field: "ci_separated_caches", Src: ptrBoolStr(src.CISeperateCache), Dst: ptrBoolStr(dst.CISeperateCache), Match: ptrBoolStr(src.CISeperateCache) == ptrBoolStr(dst.CISeperateCache)},
 		{Field: "printing_merge_request_link_enabled", Src: fmt.Sprintf("%v", src.PrintingMergeRequestLinkEnabled), Dst: fmt.Sprintf("%v", dst.PrintingMergeRequestLinkEnabled), Match: src.PrintingMergeRequestLinkEnabled == dst.PrintingMergeRequestLinkEnabled},
 		{Field: "remove_source_branch_after_merge", Src: fmt.Sprintf("%v", src.RemoveSourceBranchAfterMerge), Dst: fmt.Sprintf("%v", dst.RemoveSourceBranchAfterMerge), Match: src.RemoveSourceBranchAfterMerge == dst.RemoveSourceBranchAfterMerge},
-		{Field: "allow_merge_on_skipped_pipeline", Src: fmt.Sprintf("%v", src.AllowMergeOnSkippedPipeline), Dst: fmt.Sprintf("%v", dst.AllowMergeOnSkippedPipeline), Match: fmt.Sprintf("%v", src.AllowMergeOnSkippedPipeline) == fmt.Sprintf("%v", dst.AllowMergeOnSkippedPipeline)},
+		{Field: "allow_merge_on_skipped_pipeline", Src: ptrBoolStr(src.AllowMergeOnSkippedPipeline), Dst: ptrBoolStr(dst.AllowMergeOnSkippedPipeline), Match: ptrBoolStr(src.AllowMergeOnSkippedPipeline) == ptrBoolStr(dst.AllowMergeOnSkippedPipeline)},
 	}
 
 	if !hasChanges(diffs) {
@@ -1335,12 +1335,21 @@ func (c *ProjectCopier) copyPipelineSchedules(projectPath string) internal.Domai
 				CronTimezone: sched.CronTimezone,
 				Active:       sched.Active,
 			}); err != nil {
-				result.Items = append(result.Items, internal.ItemResult{
-					Key:    sched.Description,
-					Action: internal.ActionFailed,
-					Error:  err,
-					Diffs:  diffs,
-				})
+				if apiErr, ok := err.(*gitlab.APIError); ok && apiErr.IsForbidden() {
+					result.Items = append(result.Items, internal.ItemResult{
+						Key:    sched.Description,
+						Action: internal.ActionSkipped,
+						Diffs:  diffs,
+						Error:  fmt.Errorf("schedule owned by another user — update manually or transfer ownership"),
+					})
+				} else {
+					result.Items = append(result.Items, internal.ItemResult{
+						Key:    sched.Description,
+						Action: internal.ActionFailed,
+						Error:  err,
+						Diffs:  diffs,
+					})
+				}
 			} else {
 				result.Items = append(result.Items, internal.ItemResult{
 					Key:    sched.Description,
@@ -1625,6 +1634,13 @@ func (c *ProjectCopier) copyProjectHooks(projectPath string) internal.DomainCopy
 	}
 
 	return result
+}
+
+func ptrBoolStr(b *bool) string {
+	if b == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("%v", *b)
 }
 
 func hasUserGroupAccessLevels(b gitlab.ProtectedBranch) bool {
