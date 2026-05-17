@@ -1440,7 +1440,7 @@ func (c *GroupCopier) copyGroupSettings(groupPath string) internal.DomainCopyRes
 	}
 
 	diffs := []internal.DiffLine{
-		{Field: "mentions_disabled", Src: fmt.Sprintf("%v", src.MentionsDisabled), Dst: fmt.Sprintf("%v", dst.MentionsDisabled), Match: fmt.Sprintf("%v", src.MentionsDisabled) == fmt.Sprintf("%v", dst.MentionsDisabled)},
+		{Field: "mentions_disabled", Src: ptrBoolStr(src.MentionsDisabled), Dst: ptrBoolStr(dst.MentionsDisabled), Match: ptrBoolStr(src.MentionsDisabled) == ptrBoolStr(dst.MentionsDisabled)},
 		{Field: "prevent_sharing_groups_outside_hierarchy", Src: fmt.Sprintf("%v", src.PreventSharingGroupsOutsideHierarchy), Dst: fmt.Sprintf("%v", dst.PreventSharingGroupsOutsideHierarchy), Match: src.PreventSharingGroupsOutsideHierarchy == dst.PreventSharingGroupsOutsideHierarchy},
 	}
 

@@ -1636,13 +1636,6 @@ func (c *ProjectCopier) copyProjectHooks(projectPath string) internal.DomainCopy
 	return result
 }
 
-func ptrBoolStr(b *bool) string {
-	if b == nil {
-		return "<nil>"
-	}
-	return fmt.Sprintf("%v", *b)
-}
-
 func hasUserGroupAccessLevels(b gitlab.ProtectedBranch) bool {
 	for _, al := range append(append(b.PushAccessLevels, b.MergeAccessLevels...), b.UnprotectAccessLevels...) {
 		if !al.IsRoleBased() {
