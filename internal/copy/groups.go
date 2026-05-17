@@ -73,6 +73,8 @@ func (c *GroupCopier) copyDomain(groupPath, domain string) internal.DomainCopyRe
 		return c.enforceSecurityPolicy(groupPath)
 	case "link_merge_request_policy":
 		return c.linkMergeRequestPolicy(groupPath)
+	case "enforce_default_branch":
+		return c.enforceDefaultBranch(groupPath)
 	case "deploy_tokens":
 		return c.copyGroupDeployTokens(groupPath)
 	case "access_tokens":
@@ -1619,6 +1621,96 @@ func (c *GroupCopier) copyGroupHooks(groupPath string) internal.DomainCopyResult
 		}
 	}
 
+	return result
+}
+
+// --- enforce_default_branch ---
+
+// enforceDefaultBranch sets the standard default branch name and protection
+// settings on all groups and subgroups regardless of source values.
+// This enforces bank standards rather than mirroring source config.
+func (c *GroupCopier) enforceDefaultBranch(groupPath string) internal.DomainCopyResult {
+	result := internal.DomainCopyResult{Domain: "enforce_default_branch"}
+
+	dst, err := c.dst.GetGroup(groupPath)
+	if err != nil {
+		result.Error = fmt.Errorf("fetching dest group: %w", err)
+		return result
+	}
+
+	// Desired state — bank standard
+	wantName := "master"
+	wantPush := 0   // No one
+	wantMerge := 30 // Developers + Maintainers
+	wantForcePush := false
+	wantDevInitialPush := false
+	wantOwnersManage := true
+
+	// Check current state
+	currentName := dst.DefaultBranchName
+	var currentPush, currentMerge int
+	var currentForcePush, currentDevInitialPush bool
+	if dst.DefaultBranchProtectionDefaults != nil {
+		if len(dst.DefaultBranchProtectionDefaults.AllowedToPush) > 0 {
+			if v, ok := dst.DefaultBranchProtectionDefaults.AllowedToPush[0]["access_level"]; ok {
+				if f, ok := v.(float64); ok {
+					currentPush = int(f)
+				}
+			}
+		}
+		if len(dst.DefaultBranchProtectionDefaults.AllowedToMerge) > 0 {
+			if v, ok := dst.DefaultBranchProtectionDefaults.AllowedToMerge[0]["access_level"]; ok {
+				if f, ok := v.(float64); ok {
+					currentMerge = int(f)
+				}
+			}
+		}
+		currentForcePush = dst.DefaultBranchProtectionDefaults.AllowForcePush
+		currentDevInitialPush = dst.DefaultBranchProtectionDefaults.DeveloperCanInitialPush
+	}
+
+	diffs := []internal.DiffLine{
+		{Field: "default_branch_name", Src: wantName, Dst: currentName, Match: currentName == wantName},
+		{Field: "allowed_to_push", Src: fmt.Sprintf("%d", wantPush), Dst: fmt.Sprintf("%d", currentPush), Match: currentPush == wantPush},
+		{Field: "allowed_to_merge", Src: fmt.Sprintf("%d", wantMerge), Dst: fmt.Sprintf("%d", currentMerge), Match: currentMerge == wantMerge},
+		{Field: "allow_force_push", Src: fmt.Sprintf("%v", wantForcePush), Dst: fmt.Sprintf("%v", currentForcePush), Match: currentForcePush == wantForcePush},
+		{Field: "developer_can_initial_push", Src: fmt.Sprintf("%v", wantDevInitialPush), Dst: fmt.Sprintf("%v", currentDevInitialPush), Match: currentDevInitialPush == wantDevInitialPush},
+		{Field: "group_owners_can_manage_default_branch_protection", Src: fmt.Sprintf("%v", wantOwnersManage), Dst: "unknown", Match: false},
+	}
+
+	if c.dryRun {
+		result.Items = []internal.ItemResult{{
+			Key:    groupPath,
+			Action: internal.ActionUpdated,
+			Diffs:  diffs,
+			DryRun: true,
+		}}
+		return result
+	}
+
+	if err := c.dst.UpdateGroup(groupPath, gitlab.GroupUpdateRequest{
+		DefaultBranchName: gitlab.StrPtr(wantName),
+		DefaultBranchProtectionDefaults: &gitlab.DefaultBranchProtectionDefaults{
+			AllowedToPush:           []map[string]any{{"access_level": wantPush}},
+			AllowedToMerge:          []map[string]any{{"access_level": wantMerge}},
+			AllowForcePush:          wantForcePush,
+			DeveloperCanInitialPush: wantDevInitialPush,
+		},
+		GroupOwnersCanManageDefaultBranchProtection: gitlab.BoolPtr(wantOwnersManage),
+	}); err != nil {
+		result.Items = []internal.ItemResult{{
+			Key:    groupPath,
+			Action: internal.ActionFailed,
+			Error:  err,
+		}}
+		return result
+	}
+
+	result.Items = []internal.ItemResult{{
+		Key:    groupPath,
+		Action: internal.ActionUpdated,
+		Diffs:  diffs,
+	}}
 	return result
 }
 

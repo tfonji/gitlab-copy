@@ -237,6 +237,11 @@ func buildGroupDomains(enforceSecurityPolicy, copyCompliance, linkMRPolicy bool)
 		base = append(base, "link_merge_request_policy")
 	}
 
+	// enforce_default_branch is always last — runs after all policy domains
+	// to ensure the standard default branch settings are applied regardless
+	// of what any policy or other domain may have changed.
+	base = append(base, "enforce_default_branch")
+
 	return base
 }
 

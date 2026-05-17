@@ -5,15 +5,16 @@ package gitlab
 // this lets default_branch_name and mr_settings each issue a targeted PUT
 // without clobbering fields they don't own.
 type GroupUpdateRequest struct {
-	Description                               *string                          `json:"description,omitempty"`
-	DefaultBranchName                         *string                          `json:"default_branch_name,omitempty"`
-	DefaultBranchProtection                   *int                             `json:"default_branch_protection,omitempty"`
-	DefaultBranchProtectionDefaults           *DefaultBranchProtectionDefaults `json:"default_branch_protection_defaults,omitempty"`
-	OnlyAllowMergeIfPipelineSucceeds          *bool                            `json:"only_allow_merge_if_pipeline_succeeds,omitempty"`
-	OnlyAllowMergeIfAllDiscussionsAreResolved *bool                            `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty"`
-	PreventMergeWithoutJiraIssue              *bool                            `json:"prevent_merge_without_jira_issue,omitempty"`
-	MentionsDisabled                          *bool                            `json:"mentions_disabled,omitempty"`
-	PreventSharingGroupsOutsideHierarchy      *bool                            `json:"prevent_sharing_groups_outside_hierarchy,omitempty"`
+	Description                                 *string                          `json:"description,omitempty"`
+	DefaultBranchName                           *string                          `json:"default_branch_name,omitempty"`
+	DefaultBranchProtection                     *int                             `json:"default_branch_protection,omitempty"`
+	DefaultBranchProtectionDefaults             *DefaultBranchProtectionDefaults `json:"default_branch_protection_defaults,omitempty"`
+	OnlyAllowMergeIfPipelineSucceeds            *bool                            `json:"only_allow_merge_if_pipeline_succeeds,omitempty"`
+	OnlyAllowMergeIfAllDiscussionsAreResolved   *bool                            `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty"`
+	PreventMergeWithoutJiraIssue                *bool                            `json:"prevent_merge_without_jira_issue,omitempty"`
+	MentionsDisabled                            *bool                            `json:"mentions_disabled,omitempty"`
+	PreventSharingGroupsOutsideHierarchy        *bool                            `json:"prevent_sharing_groups_outside_hierarchy,omitempty"`
+	GroupOwnersCanManageDefaultBranchProtection *bool                            `json:"group_owners_can_manage_default_branch_protection,omitempty"`
 }
 
 // UpdateGroup issues a PUT /groups/:id with the provided fields.

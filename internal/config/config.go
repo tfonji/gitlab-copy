@@ -76,6 +76,7 @@ var DefaultGroupDomains = []string{
 	"security_policy_project",
 	"deploy_tokens",
 	"access_tokens",
+	"enforce_default_branch",
 }
 
 var DefaultProjectDomains = []string{
