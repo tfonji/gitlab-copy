@@ -200,8 +200,9 @@ func updateDomainFlags(path string, groupDomains []string) error {
 }
 
 // buildGroupDomains returns the groups domain list based on pipeline flags.
-// compliance_frameworks, compliance_assignments, and enforce_security_policy
-// are opt-in — excluded by default.
+// ORDER MATTERS — compliance must run before policy enforcement, and all
+// policy-linking domains must always be last so they run after all other
+// settings have been applied.
 func buildGroupDomains(enforceSecurityPolicy, copyCompliance, linkMRPolicy bool) []string {
 	base := []string{
 		"group_settings",
@@ -221,9 +222,14 @@ func buildGroupDomains(enforceSecurityPolicy, copyCompliance, linkMRPolicy bool)
 		"access_tokens",
 	}
 
+	// Compliance must run before policy enforcement domains
 	if copyCompliance {
 		base = append(base, "compliance_frameworks", "compliance_assignments")
 	}
+
+	// Policy-linking domains are always appended last — enforce_security_policy
+	// deletes compliance frameworks so it must run after compliance_assignments.
+	// link_merge_request_policy is always the final domain.
 	if enforceSecurityPolicy {
 		base = append(base, "enforce_security_policy")
 	}
