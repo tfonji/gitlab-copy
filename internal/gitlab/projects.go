@@ -10,6 +10,7 @@ type Project struct {
 	Name              string `json:"name"`
 	Path              string `json:"path"`
 	PathWithNamespace string `json:"path_with_namespace"`
+	WebURL            string `json:"web_url"`
 	Description       string `json:"description"`
 	Visibility        string `json:"visibility"`
 

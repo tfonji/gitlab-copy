@@ -5,8 +5,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"gitlab-copy/internal/gitlab"
 
@@ -50,6 +52,11 @@ func Run(configPath string, srcClient, dstClient *gitlab.Client, w io.Writer) er
 			}
 		} else {
 			fmt.Fprintln(w, "Not running in CI — config updated locally, no git push")
+		}
+
+		// Generate batch report from existing config
+		if err := generateBatchReport(configPath, srcClient, nil, nil, w); err != nil {
+			fmt.Fprintf(w, "Warning: could not generate batch report: %v\n", err)
 		}
 		return nil
 	}
@@ -138,6 +145,99 @@ func Run(configPath string, srcClient, dstClient *gitlab.Client, w io.Writer) er
 		fmt.Fprintln(w, "\nNot running in CI — config updated locally, no git push")
 	}
 
+	// Generate batch report with resolved details
+	if err := generateBatchReport(configPath, srcClient, allGroups, projects, w); err != nil {
+		fmt.Fprintf(w, "Warning: could not generate batch report: %v\n", err)
+	}
+
+	return nil
+}
+
+// generateBatchReport writes migration-batch.md alongside config.yaml.
+// When groupPaths/projectPaths are nil (no APP_IDS), it reads them from config.
+func generateBatchReport(configPath string, src *gitlab.Client, groupPaths, projectPaths []string, w io.Writer) error {
+	dir := filepath.Dir(configPath)
+	outPath := filepath.Join(dir, "migration-batch.md")
+
+	// If no explicit lists, load from config
+	if groupPaths == nil || projectPaths == nil {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return fmt.Errorf("reading config: %w", err)
+		}
+		var cfg struct {
+			Groups struct {
+				Include []string `yaml:"include"`
+			} `yaml:"groups"`
+			Projects struct {
+				Include []string `yaml:"include"`
+			} `yaml:"projects"`
+		}
+		if err := yaml.Unmarshal(data, &cfg); err != nil {
+			return fmt.Errorf("parsing config: %w", err)
+		}
+		groupPaths = cfg.Groups.Include
+		projectPaths = cfg.Projects.Include
+	}
+
+	f, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("creating batch report: %w", err)
+	}
+	defer f.Close()
+
+	now := time.Now().UTC().Format("2006-01-02 15:04:05 UTC")
+	appIDs := os.Getenv("APP_IDS")
+
+	fmt.Fprintf(f, "# Migration Batch Report\n\n")
+	fmt.Fprintf(f, "**Generated:** %s\n\n", now)
+	if appIDs != "" {
+		fmt.Fprintf(f, "**APP_IDS:** %s\n\n", appIDs)
+	} else {
+		fmt.Fprintf(f, "**APP_IDS:** _(not set — using existing config)_\n\n")
+	}
+
+	// --- Groups ---
+	fmt.Fprintf(f, "## Groups (%d)\n\n", len(groupPaths))
+	if len(groupPaths) == 0 {
+		fmt.Fprintf(f, "_No groups in config._\n\n")
+	} else {
+		fmt.Fprintf(f, "| Path | ID | URL |\n")
+		fmt.Fprintf(f, "|---|---|---|\n")
+		for _, path := range groupPaths {
+			g, err := src.GetGroup(path)
+			if err != nil || g == nil {
+				fmt.Fprintf(f, "| `%s` | _(not found)_ | |\n", path)
+				continue
+			}
+			fmt.Fprintf(f, "| `%s` | %d | %s |\n", g.FullPath, g.ID, g.WebURL)
+		}
+		fmt.Fprintf(f, "\n")
+	}
+
+	// --- Projects ---
+	fmt.Fprintf(f, "## Projects (%d)\n\n", len(projectPaths))
+	if len(projectPaths) == 0 {
+		fmt.Fprintf(f, "_No projects in config._\n\n")
+	} else {
+		fmt.Fprintf(f, "| Path | ID | URL | Topics |\n")
+		fmt.Fprintf(f, "|---|---|---|---|\n")
+		for _, path := range projectPaths {
+			p, err := src.GetProject(path)
+			if err != nil || p == nil {
+				fmt.Fprintf(f, "| `%s` | _(not found)_ | | |\n", path)
+				continue
+			}
+			topics := strings.Join(p.Topics, ", ")
+			if topics == "" {
+				topics = "—"
+			}
+			fmt.Fprintf(f, "| `%s` | %d | %s | %s |\n", p.PathWithNamespace, p.ID, p.WebURL, topics)
+		}
+		fmt.Fprintf(f, "\n")
+	}
+
+	fmt.Fprintf(w, "Batch report written to %s\n", outPath)
 	return nil
 }
 
