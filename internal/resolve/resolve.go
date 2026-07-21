@@ -37,13 +37,12 @@ func Run(configPath string, srcClient, dstClient *gitlab.Client, w io.Writer) er
 	fmt.Fprintf(w, "  ENFORCE_SECURITY_POLICY:     %v\n", enforceSecurityPolicy)
 	fmt.Fprintf(w, "  COPY_COMPLIANCE_FRAMEWORKS:  %v\n", copyCompliance)
 	fmt.Fprintf(w, "  LINK_MERGE_REQUEST_POLICY:   %v\n", linkMRPolicy)
-	fmt.Fprintf(w, "  domains.groups will be set to: %s\n", strings.Join(groupDomains, ", "))
 
 	appIDsRaw := os.Getenv("APP_IDS")
 	if strings.TrimSpace(appIDsRaw) == "" {
 		// No APP_IDS — skip project resolution but still update domain flags
 		fmt.Fprintln(w, "\nAPP_IDS not set or empty — skipping project resolve, updating domain flags only")
-		if err := updateDomainFlags(configPath, groupDomains); err != nil {
+		if err := updateDomainFlags(configPath, enforceSecurityPolicy, copyCompliance, linkMRPolicy); err != nil {
 			return fmt.Errorf("updating domain flags: %w", err)
 		}
 		if os.Getenv("CI") == "true" {
@@ -277,9 +276,10 @@ func sortedKeys(m map[string]bool) []string {
 	return keys
 }
 
-// updateDomainFlags updates only the domains.groups section in config.yaml,
-// leaving groups, projects, and all other sections untouched.
-func updateDomainFlags(path string, groupDomains []string) error {
+// updateDomainFlags reads the existing domains.groups from config, removes any
+// managed domains (compliance, policy), then appends the enabled ones back.
+// The base domain list is left exactly as it appears in the file.
+func updateDomainFlags(path string, enforceSecurityPolicy, copyCompliance, linkMRPolicy bool) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("reading config: %w", err)
@@ -291,7 +291,42 @@ func updateDomainFlags(path string, groupDomains []string) error {
 	if len(root.Content) == 0 {
 		return fmt.Errorf("empty config file")
 	}
-	updateNestedSection(root.Content[0], "domains", "groups", groupDomains)
+	doc := root.Content[0]
+
+	// Read existing domains.groups
+	existing := readStringSequence(doc, "domains", "groups")
+
+	// Managed domains — always stripped then conditionally re-appended
+	managed := map[string]bool{
+		"compliance_frameworks":     true,
+		"compliance_assignments":    true,
+		"enforce_security_policy":   true,
+		"link_merge_request_policy": true,
+		"enforce_default_branch":    true,
+	}
+
+	// Keep base domains as-is
+	var base []string
+	for _, d := range existing {
+		if !managed[d] {
+			base = append(base, d)
+		}
+	}
+
+	// Re-append managed domains in correct order based on flags
+	if copyCompliance {
+		base = append(base, "compliance_frameworks", "compliance_assignments")
+	}
+	if enforceSecurityPolicy {
+		base = append(base, "enforce_security_policy")
+	}
+	if linkMRPolicy {
+		base = append(base, "link_merge_request_policy")
+	}
+	base = append(base, "enforce_default_branch")
+
+	updateNestedSection(doc, "domains", "groups", base)
+
 	out, err := yaml.Marshal(&root)
 	if err != nil {
 		return fmt.Errorf("marshalling config: %w", err)
@@ -385,6 +420,34 @@ func writeConfig(path string, groupsInclude []string, projectsInclude []string, 
 	}
 
 	return os.WriteFile(path, out, 0644)
+}
+
+// readStringSequence reads a string sequence from a nested YAML path e.g. domains.groups
+func readStringSequence(mapping *yaml.Node, section, key string) []string {
+	for i := 0; i < len(mapping.Content)-1; i += 2 {
+		if mapping.Content[i].Value != section {
+			continue
+		}
+		sectionNode := mapping.Content[i+1]
+		if sectionNode.Kind != yaml.MappingNode {
+			return nil
+		}
+		for j := 0; j < len(sectionNode.Content)-1; j += 2 {
+			if sectionNode.Content[j].Value != key {
+				continue
+			}
+			seqNode := sectionNode.Content[j+1]
+			if seqNode.Kind != yaml.SequenceNode {
+				return nil
+			}
+			var result []string
+			for _, item := range seqNode.Content {
+				result = append(result, item.Value)
+			}
+			return result
+		}
+	}
+	return nil
 }
 
 // updateNestedSection finds a top-level key, then updates a sub-key within it.
