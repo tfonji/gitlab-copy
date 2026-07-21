@@ -6,16 +6,17 @@ import (
 )
 
 type Group struct {
-	ID          int     `json:"id"`
-	Name        string  `json:"name"`
-	Path        string  `json:"path"`
-	Description string  `json:"description"`
-	Visibility  string  `json:"visibility"`
-	AvatarURL   *string `json:"avatar_url"`
-	FullPath    string  `json:"full_path"`
-	FullName    string  `json:"full_name"`
-	WebURL      string  `json:"web_url"`
-	ParentID    *int    `json:"parent_id"`
+	ID                int     `json:"id"`
+	Name              string  `json:"name"`
+	Path              string  `json:"path"`
+	Description       string  `json:"description"`
+	Visibility        string  `json:"visibility"`
+	AvatarURL         *string `json:"avatar_url"`
+	FullPath          string  `json:"full_path"`
+	FullName          string  `json:"full_name"`
+	WebURL            string  `json:"web_url"`
+	MarkedForDeletion bool    `json:"marked_for_deletion"`
+	ParentID          *int    `json:"parent_id"`
 
 	LFSEnabled                            bool    `json:"lfs_enabled"`
 	RequestAccessEnabled                  bool    `json:"request_access_enabled"`
@@ -58,6 +59,36 @@ type DefaultBranchProtectionDefaults struct {
 	AllowForcePush          bool             `json:"allow_force_push"`
 	AllowedToMerge          []map[string]any `json:"allowed_to_merge"`
 	DeveloperCanInitialPush bool             `json:"developer_can_initial_push"`
+}
+
+// ListAllTopLevelGroups returns all top-level groups on the instance (no parent).
+// Skips archived groups. Requires admin or at least Reporter on all groups.
+func (c *Client) ListAllTopLevelGroups() ([]Group, error) {
+	var all []Group
+	page := 1
+	for {
+		params := url.Values{}
+		params.Set("per_page", "100")
+		params.Set("page", fmt.Sprintf("%d", page))
+		params.Set("top_level_only", "true")
+		var batch []Group
+		if err := c.get("/groups", params, &batch); err != nil {
+			return nil, err
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, g := range batch {
+			if !g.MarkedForDeletion {
+				all = append(all, g)
+			}
+		}
+		if len(batch) < 100 {
+			break
+		}
+		page++
+	}
+	return all, nil
 }
 
 func (c *Client) GetGroup(groupPath string) (*Group, error) {

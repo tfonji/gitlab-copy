@@ -110,6 +110,7 @@ func main() {
 	singleProj := fs.String("project", "", "copy a single project path")
 	dryRun := fs.Bool("dry-run", false, "preview without making changes")
 	noColor := fs.Bool("no-color", false, "disable color output")
+	allGroups := fs.Bool("all-groups", false, "traverse entire source instance — ignores groups.include")
 	if err := fs.Parse(flagArgs); err != nil {
 		fmt.Fprintf(os.Stderr, "error parsing flags: %v\n", err)
 		os.Exit(1)
@@ -138,7 +139,7 @@ func main() {
 	srcClient := gitlab.NewClient(cfg.Source.URL, cfg.Source.Token())
 	dstClient := gitlab.NewClient(cfg.Destination.URL, cfg.Destination.Token())
 
-	result := run(scope, *dryRun, cfg, srcClient, dstClient)
+	result := run(scope, *dryRun, *allGroups, cfg, srcClient, dstClient)
 
 	useColor := !*noColor
 	term := report.NewTerminal(os.Stdout, useColor)
@@ -175,7 +176,7 @@ func main() {
 	}
 }
 
-func run(scope string, dryRun bool, cfg *config.Config, src, dst *gitlab.Client) *internal.RunResult {
+func run(scope string, dryRun bool, allGroups bool, cfg *config.Config, src, dst *gitlab.Client) *internal.RunResult {
 	runGroups := scope == "groups" || scope == "all"
 	runProjects := scope == "projects" || scope == "all"
 
@@ -184,7 +185,7 @@ func run(scope string, dryRun bool, cfg *config.Config, src, dst *gitlab.Client)
 	if runGroups {
 		groupCopier := copy.NewGroupCopier(src, dst, cfg.Domains.Groups, dryRun, cfg.Security.PolicyProject, cfg.Security.MergeRequestPolicyProject)
 
-		groups, err := copy.EnumerateGroups(cfg, src)
+		groups, err := copy.EnumerateGroups(cfg, src, allGroups)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error enumerating groups: %v\n", err)
 			os.Exit(1)
@@ -206,7 +207,7 @@ func run(scope string, dryRun bool, cfg *config.Config, src, dst *gitlab.Client)
 	if runProjects {
 		projCopier := copy.NewProjectCopier(src, dst, cfg.Domains.Projects, dryRun)
 
-		projects, err := copy.EnumerateProjects(cfg, src)
+		projects, err := copy.EnumerateProjects(cfg, src, allGroups)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error enumerating projects: %v\n", err)
 			os.Exit(1)
