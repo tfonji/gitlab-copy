@@ -105,7 +105,40 @@ func Load(path string) (*Config, error) {
 	return LoadWithOverrides(path, "", "")
 }
 
-// LoadForResolve loads a config file skipping groups/projects validation.
+// LoadForAllGroups loads config skipping the groups.include/projects.include
+// validation — used when -all-groups flag is set.
+func LoadForAllGroups(path string) (*Config, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("opening config file: %w", err)
+	}
+	defer f.Close()
+
+	var cfg Config
+	dec := yaml.NewDecoder(f)
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("parsing config file: %w", err)
+	}
+
+	cfg.applyDefaults()
+
+	// Only validate connection fields — skip groups/projects include check
+	if cfg.Source.URL == "" {
+		return nil, fmt.Errorf("source.url is required")
+	}
+	if cfg.Destination.URL == "" {
+		return nil, fmt.Errorf("destination.url is required")
+	}
+	if cfg.Source.TokenEnv == "" {
+		return nil, fmt.Errorf("source.token_env is required")
+	}
+	if cfg.Destination.TokenEnv == "" {
+		return nil, fmt.Errorf("destination.token_env is required")
+	}
+
+	return &cfg, nil
+}
+
 // Used by the resolve command which is specifically designed to populate those sections.
 func LoadForResolve(path string) (*Config, error) {
 	f, err := os.Open(path)
